@@ -46,18 +46,32 @@ async function runMigration(filePath: string) {
 
 async function main() {
   try {
-    // Get migration file path relative to project root
-    const migrationFile = path.resolve(
+    // Get migration files directory
+    const migrationsDir = path.resolve(
       process.cwd(),
-      "src/db/migrations/0004_clear_nekra.sql"
+      "src/db/migrations"
     );
     
-    if (!fs.existsSync(migrationFile)) {
-      console.error(`Migration file not found: ${migrationFile}`);
+    // Get all migration files sorted by name
+    const migrationFiles = fs
+      .readdirSync(migrationsDir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort()
+      .map((file) => path.join(migrationsDir, file));
+
+    if (migrationFiles.length === 0) {
+      console.error(`No migration files found in ${migrationsDir}`);
       process.exit(1);
     }
 
-    await runMigration(migrationFile);
+    console.log(`Found ${migrationFiles.length} migration file(s)\n`);
+
+    // Run each migration in sequence
+    for (const migrationFile of migrationFiles) {
+      await runMigration(migrationFile);
+      console.log(""); // Empty line between migrations
+    }
+
     console.log("\n✓ All migrations completed successfully!");
     process.exit(0);
   } catch (error) {

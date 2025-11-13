@@ -73,6 +73,7 @@ function normalizeRow(
 ): {
   titleEn?: string;
   titleFr?: string;
+  subtitle?: string; // Product subtitle (important from suppliers)
   descriptionEn?: string;
   descriptionFr?: string;
   cost?: string;
@@ -99,10 +100,22 @@ function normalizeRow(
   images?: string[];
   variantOptions?: Record<string, unknown>;
   specifications?: Record<string, unknown>;
+  // Supplier identifiers (important!)
+  supplierProductId?: string; // pid from supplier
+  supplierVariantId?: string; // vid from supplier
+  marketplaceUrl?: string; // URL to product on supplier's marketplace site
+  // Supplier-specific fields (stored in specifications)
+  optionMapJson?: Record<string, unknown>;
+  metadataJson?: Record<string, unknown>;
+  optionAxes?: string;
+  variantTitle?: string;
+  subtitle?: string;
+  thumbnail?: string;
 } {
   const normalized: {
     titleEn?: string;
     titleFr?: string;
+    subtitle?: string; // Product subtitle (important from suppliers)
     descriptionEn?: string;
     descriptionFr?: string;
     cost?: string;
@@ -127,13 +140,25 @@ function normalizeRow(
     hsCode?: string;
     midCode?: string;
     images?: string[];
-    variantOptions?: Record<string, unknown>;
-    specifications?: Record<string, unknown>;
+  variantOptions?: Record<string, unknown>;
+  specifications?: Record<string, unknown>;
+  // Supplier identifiers (important!)
+  supplierProductId?: string; // pid from CJ Dropshipping
+  supplierVariantId?: string; // vid from CJ Dropshipping
+  marketplaceUrl?: string; // URL to product on supplier's marketplace site
+  // CJ Dropshipping specific fields (stored in specifications)
+  optionMapJson?: Record<string, unknown>;
+  metadataJson?: Record<string, unknown>;
+  optionAxes?: string;
+  variantTitle?: string;
+  subtitle?: string;
+  thumbnail?: string;
   } = {};
 
   Object.entries(mappedColumns).forEach(([sourceCol, targetField]) => {
     const value = row[sourceCol];
-    if (value === undefined || value === null || value === "") return;
+    // Allow subtitle to be processed even if empty (important supplier field)
+    if (value === undefined || value === null || (value === "" && targetField !== "supplier_subtitle")) return;
 
     switch (targetField) {
       // Basic Information
@@ -152,7 +177,23 @@ function normalizeRow(
 
       // Pricing
       case "cost":
-        normalized.cost = String(value);
+        // Handle supplier amount_minor (minor units like cents)
+        // Convert to dollars by dividing by 100
+        // Cost is always stored in USD in the database (all currencies converted to USD)
+        let costValue: number;
+        if (sourceCol.toLowerCase().includes("amount_minor") || sourceCol.toLowerCase().includes("minor")) {
+          costValue = parseFloat(String(value)) / 100; // Convert cents to dollars
+        } else {
+          costValue = parseFloat(String(value));
+        }
+        
+        if (!isNaN(costValue) && costValue > 0) {
+          // Cost is always in USD - if currency_code indicates otherwise, 
+          // conversion should happen here (for now, assume already USD from supplier)
+          normalized.cost = String(costValue);
+        } else {
+          normalized.cost = String(value);
+        }
         break;
       case "selling_price":
         normalized.sellingPrice = String(value);
@@ -173,9 +214,11 @@ function normalizeRow(
         break;
 
       // Physical Attributes
+      // Weight is stored in grams (no conversion)
       case "weight":
         normalized.weight = String(value);
         break;
+      // Length, width, height are stored in mm (no conversion)
       case "length":
         normalized.length = String(value);
         break;
@@ -194,7 +237,8 @@ function normalizeRow(
         normalized.sku = String(value);
         break;
       case "currency":
-        normalized.currency = String(value);
+        // Currency must always be USD for column mapping imports
+        normalized.currency = "USD";
         break;
       case "status":
         normalized.status = String(value);
@@ -237,11 +281,29 @@ function normalizeRow(
 
       // Media
       case "images":
-        // Handle comma-separated URLs or single URL
+        // Handle comma-separated URLs, single URL, or supplier images_json
         const imageValue = String(value);
-        normalized.images = imageValue.includes(",")
-          ? imageValue.split(",").map((url) => url.trim())
-          : [imageValue.trim()];
+        if (sourceCol.toLowerCase().includes("images_json") || sourceCol.toLowerCase().includes("json")) {
+          // Try parsing as JSON first (supplier format)
+          try {
+            const imageJson = JSON.parse(imageValue);
+            // Extract URLs from JSON object (e.g., {"img1": "url1", "img2": "url2"})
+            const imageUrls = Object.values(imageJson)
+              .filter((url) => typeof url === "string" && url.trim() !== "")
+              .map((url) => String(url).trim());
+            normalized.images = imageUrls.length > 0 ? imageUrls : [imageValue.trim()];
+          } catch {
+            // Fallback to comma-separated or single URL
+            normalized.images = imageValue.includes(",")
+              ? imageValue.split(",").map((url) => url.trim())
+              : [imageValue.trim()];
+          }
+        } else {
+          // Handle comma-separated URLs or single URL
+          normalized.images = imageValue.includes(",")
+            ? imageValue.split(",").map((url) => url.trim())
+            : [imageValue.trim()];
+        }
         break;
 
       // Variants & Options
@@ -274,8 +336,191 @@ function normalizeRow(
           normalized.specifications = { [sourceCol]: String(value) };
         }
         break;
+
+      // Supplier identifiers (important - store as dedicated fields)
+      case "supplier_pid":
+        normalized.supplierProductId = String(value);
+        // Also store in specifications for reference
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.pid = String(value);
+        break;
+      case "supplier_vid":
+        normalized.supplierVariantId = String(value);
+        // Also store in specifications for reference
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.vid = String(value);
+        break;
+      case "marketplace_url":
+        // Store marketplace URL as dedicated field (URL to product on supplier's site)
+        normalized.marketplaceUrl = String(value).trim();
+        // Also store in specifications for reference
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.marketplace_url = String(value).trim();
+        break;
+      case "supplier_option_map":
+        if (!normalized.specifications) normalized.specifications = {};
+        try {
+          normalized.specifications.option_map_json = JSON.parse(String(value));
+        } catch {
+          normalized.specifications.option_map_json = String(value);
+        }
+        break;
+      case "supplier_metadata":
+        if (!normalized.specifications) normalized.specifications = {};
+        try {
+          normalized.specifications.metadata_json = JSON.parse(String(value));
+        } catch {
+          normalized.specifications.metadata_json = String(value);
+        }
+        break;
+      case "supplier_option_axes":
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.option_axes = String(value);
+        break;
+      case "supplier_variant_title":
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.variant_title = String(value);
+        break;
+      case "supplier_subtitle":
+        // Store subtitle as dedicated field (important from suppliers)
+        // Always store subtitle, even if empty (empty string will be inserted)
+        const subtitleValue = String(value).trim();
+        normalized.subtitle = subtitleValue;
+        // Store in specifications for reference (always store, even if empty)
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.subtitle = subtitleValue;
+        break;
+      case "supplier_thumbnail":
+        // Add thumbnail to images array if not already present
+        if (!normalized.images) normalized.images = [];
+        const thumbnailUrl = String(value).trim();
+        if (thumbnailUrl && !normalized.images.includes(thumbnailUrl)) {
+          normalized.images.unshift(thumbnailUrl); // Add thumbnail as first image
+        }
+        if (!normalized.specifications) normalized.specifications = {};
+        normalized.specifications.thumbnail = thumbnailUrl;
+        break;
+      case "supplier_images_json":
+        // Handle images_json - parse JSON and extract URLs
+        try {
+          const imageJson = JSON.parse(String(value));
+          const imageUrls = Object.values(imageJson)
+            .filter((url) => typeof url === "string" && url.trim() !== "")
+            .map((url) => String(url).trim());
+          if (imageUrls.length > 0) {
+            if (!normalized.images) normalized.images = [];
+            // Add images from JSON to the images array
+            imageUrls.forEach((url) => {
+              if (!normalized.images!.includes(url)) {
+                normalized.images!.push(url);
+              }
+            });
+          }
+        } catch {
+          // If JSON parsing fails, treat as regular images field
+          const imageValue = String(value);
+          normalized.images = imageValue.includes(",")
+            ? imageValue.split(",").map((url) => url.trim())
+            : [imageValue.trim()];
+        }
+        break;
     }
   });
+
+  // Handle unmapped supplier fields - store in specifications
+  // These fields don't have direct mappings but should be preserved
+  // Note: pid, vid, and subtitle are handled above as important supplier fields
+  const supplierFields = ["option_map_json", "metadata_json", "option_axes", "variant_title"];
+  supplierFields.forEach((field) => {
+    if (row[field] !== undefined && row[field] !== null && row[field] !== "") {
+      const value = row[field];
+      if (!normalized.specifications) {
+        normalized.specifications = {};
+      }
+      
+      // Handle JSON fields
+      if (field === "option_map_json" || field === "metadata_json") {
+        try {
+          normalized.specifications[field] = JSON.parse(String(value));
+        } catch {
+          normalized.specifications[field] = String(value);
+        }
+      } else {
+        normalized.specifications[field] = String(value);
+      }
+    }
+  });
+
+  // Handle image fields: thumbnail, images, images_json
+  // thumbnail
+  if (row["thumbnail"] !== undefined && row["thumbnail"] !== null && row["thumbnail"] !== "") {
+    const thumbnailUrl = String(row["thumbnail"]).trim();
+    if (thumbnailUrl) {
+      if (!normalized.images) normalized.images = [];
+      if (!normalized.images.includes(thumbnailUrl)) {
+        normalized.images.unshift(thumbnailUrl); // Add thumbnail as first image
+      }
+      if (!normalized.specifications) normalized.specifications = {};
+      normalized.specifications.thumbnail = thumbnailUrl;
+    }
+  }
+  
+  // images_json - parse JSON and extract URLs
+  if (row["images_json"] !== undefined && row["images_json"] !== null && row["images_json"] !== "") {
+    try {
+      const imageJson = JSON.parse(String(row["images_json"]));
+      const imageUrls = Object.values(imageJson)
+        .filter((url) => typeof url === "string" && url.trim() !== "")
+        .map((url) => String(url).trim());
+      if (imageUrls.length > 0) {
+        if (!normalized.images) normalized.images = [];
+        imageUrls.forEach((url) => {
+          if (!normalized.images!.includes(url)) {
+            normalized.images!.push(url);
+          }
+        });
+      }
+    } catch {
+      // If JSON parsing fails, ignore
+    }
+  }
+  
+  // images - comma-separated or single URL
+  if (row["images"] !== undefined && row["images"] !== null && row["images"] !== "") {
+    const imageValue = String(row["images"]);
+    const imageUrls = imageValue.includes(",")
+      ? imageValue.split(",").map((url) => url.trim())
+      : [imageValue.trim()];
+    if (!normalized.images) normalized.images = [];
+    imageUrls.forEach((url) => {
+      if (url && !normalized.images!.includes(url)) {
+        normalized.images!.push(url);
+      }
+    });
+  }
+
+  // Also check for pid, vid, and subtitle if they weren't mapped but exist in the row
+  // These are important supplier fields
+  if (!normalized.supplierProductId && row["pid"] !== undefined && row["pid"] !== null && row["pid"] !== "") {
+    normalized.supplierProductId = String(row["pid"]);
+    if (!normalized.specifications) normalized.specifications = {};
+    normalized.specifications.pid = String(row["pid"]);
+  }
+  if (!normalized.supplierVariantId && row["vid"] !== undefined && row["vid"] !== null && row["vid"] !== "") {
+    normalized.supplierVariantId = String(row["vid"]);
+    if (!normalized.specifications) normalized.specifications = {};
+    normalized.specifications.vid = String(row["vid"]);
+  }
+  if (!normalized.subtitle && row["subtitle"] !== undefined && row["subtitle"] !== null && row["subtitle"] !== "") {
+    normalized.subtitle = String(row["subtitle"]);
+    if (!normalized.specifications) normalized.specifications = {};
+    normalized.specifications.subtitle = String(row["subtitle"]);
+  }
+  if (!normalized.marketplaceUrl && row["marketplace_url"] !== undefined && row["marketplace_url"] !== null && row["marketplace_url"] !== "") {
+    normalized.marketplaceUrl = String(row["marketplace_url"]).trim();
+    if (!normalized.specifications) normalized.specifications = {};
+    normalized.specifications.marketplace_url = String(row["marketplace_url"]).trim();
+  }
 
   return normalized;
 }
@@ -361,6 +606,7 @@ export async function saveDraftsFromImport(params: SaveDraftsParams) {
         }
 
         // Parse cost as number (strip currency symbols and whitespace)
+        // Cost is always stored in USD in the database
         const costString = String(normalized.cost).replace(/[$€£¥,\s]/g, '').trim();
         const cost = parseFloat(costString);
         if (isNaN(cost) || cost <= 0) {
@@ -370,6 +616,8 @@ export async function saveDraftsFromImport(params: SaveDraftsParams) {
           errors.push(errorMsg);
           continue;
         }
+        // Note: Cost is assumed to be in USD from supplier
+        // If currency conversion is needed, it should happen here before storing
 
         // Download and upload images to R2 drafts folder if provided
         let uploadedImages: string[] = [];
@@ -393,35 +641,21 @@ export async function saveDraftsFromImport(params: SaveDraftsParams) {
           }
         }
 
-        // Build specifications object with all additional fields
+        // Build specifications object with supplier-specific and additional fields
+        // Store fields that don't have dedicated columns in specifications
         const specs: Record<string, unknown> = {
           ...(normalized.specifications || {}),
-          // Add Medusa fields to specifications
-          ...(normalized.handle && { handle: normalized.handle }),
-          ...(normalized.sku && { sku: normalized.sku }),
-          ...(normalized.currency && { currency_code: normalized.currency }),
-          ...(normalized.weight && { weight: parseFloat(normalized.weight) || normalized.weight }),
-          ...(normalized.length && { length: parseFloat(normalized.length) || normalized.length }),
-          ...(normalized.width && { width: parseFloat(normalized.width) || normalized.width }),
-          ...(normalized.height && { height: parseFloat(normalized.height) || normalized.height }),
-          ...(normalized.material && { material: normalized.material }),
-          ...(normalized.type && { type: normalized.type }),
-          ...(normalized.collectionId && { collection_id: normalized.collectionId }),
-          ...(normalized.categoryIds && normalized.categoryIds.length > 0 && {
-            category_ids: normalized.categoryIds,
-          }),
-          ...(normalized.tags && normalized.tags.length > 0 && { tags: normalized.tags }),
-          ...(normalized.originCountry && { origin_country: normalized.originCountry }),
-          ...(normalized.hsCode && { hs_code: normalized.hsCode }),
-          ...(normalized.midCode && { mid_code: normalized.midCode }),
+          // Store variant options and other complex data
           ...(normalized.variantOptions && { variant_options: normalized.variantOptions }),
         };
 
-        // Create draft product
+        // Create draft product with all fields
         const draftData = {
           supplierId,
           titleEn: normalized.titleEn,
           titleFr: normalized.titleFr,
+          // Always include subtitle if it exists (even if empty string)
+          ...(normalized.subtitle !== undefined && { subtitle: normalized.subtitle }),
           descriptionEn: normalized.descriptionEn,
           descriptionFr: normalized.descriptionFr,
           cost: cost.toFixed(2),
@@ -434,6 +668,42 @@ export async function saveDraftsFromImport(params: SaveDraftsParams) {
           ...(normalized.metaTitle && { metaTitle: normalized.metaTitle }),
           ...(normalized.metaDescription && { metaDescription: normalized.metaDescription }),
           images: uploadedImages.length > 0 ? uploadedImages : normalized.images,
+          // Product identification
+          ...(normalized.sku && { sku: normalized.sku }),
+          ...(normalized.handle && { handle: normalized.handle }),
+          ...(normalized.currency && { currency: normalized.currency }),
+          // Supplier identifiers (important!)
+          ...(normalized.supplierProductId && { supplierProductId: normalized.supplierProductId }),
+          ...(normalized.supplierVariantId && { supplierVariantId: normalized.supplierVariantId }),
+          ...(normalized.marketplaceUrl && { marketplaceUrl: normalized.marketplaceUrl }),
+          // Physical attributes (weight in grams, dimensions in mm)
+          ...(normalized.weight && {
+            weight: parseFloat(normalized.weight).toFixed(2),
+          }),
+          ...(normalized.length && {
+            length: parseFloat(normalized.length).toFixed(2),
+          }),
+          ...(normalized.width && {
+            width: parseFloat(normalized.width).toFixed(2),
+          }),
+          ...(normalized.height && {
+            height: parseFloat(normalized.height).toFixed(2),
+          }),
+          ...(normalized.material && { material: normalized.material }),
+          // Shipping & Customs
+          ...(normalized.originCountry && { originCountry: normalized.originCountry }),
+          ...(normalized.hsCode && { hsCode: normalized.hsCode }),
+          ...(normalized.midCode && { midCode: normalized.midCode }),
+          // Product organization
+          ...(normalized.type && { type: normalized.type }),
+          ...(normalized.collectionId && { collectionId: normalized.collectionId }),
+          ...(normalized.categoryIds && normalized.categoryIds.length > 0 && {
+            categoryIds: normalized.categoryIds,
+          }),
+          ...(normalized.tags && normalized.tags.length > 0 && {
+            tags: normalized.tags,
+          }),
+          // Specifications (supplier-specific fields and other flexible data)
           specifications: Object.keys(specs).length > 0 ? specs : undefined,
           status: (normalized.status as "draft" | "enriched" | "ready" | "published" | "archived") || ("draft" as const),
         };

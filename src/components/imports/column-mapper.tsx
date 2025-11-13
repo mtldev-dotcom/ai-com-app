@@ -70,13 +70,13 @@ const fieldCategories: FieldCategory[] = [
     fields: [
       {
         value: "cost",
-        label: "Cost (CAD)",
+        label: "Cost (USD)",
         required: true,
         description: "Supplier cost price",
       },
       {
         value: "selling_price",
-        label: "Selling Price (CAD)",
+        label: "Selling Price (USD)",
         required: false,
         description: "Retail selling price",
       },
@@ -278,6 +278,71 @@ const fieldCategories: FieldCategory[] = [
       },
     ],
   },
+  {
+    label: "Supplier Fields",
+    fields: [
+      {
+        value: "supplier_pid",
+        label: "Supplier Product ID (pid)",
+        required: false,
+        description: "Supplier's product identifier",
+      },
+      {
+        value: "supplier_vid",
+        label: "Supplier Variant ID (vid)",
+        required: false,
+        description: "Supplier's variant identifier",
+      },
+      {
+        value: "supplier_subtitle",
+        label: "Subtitle",
+        required: false,
+        description: "Product subtitle from supplier",
+      },
+      {
+        value: "marketplace_url",
+        label: "Marketplace URL",
+        required: false,
+        description: "URL to product on supplier's marketplace site",
+      },
+      {
+        value: "supplier_option_map",
+        label: "Option Map (option_map_json)",
+        required: false,
+        description: "Variant option mapping as JSON",
+      },
+      {
+        value: "supplier_metadata",
+        label: "Metadata (metadata_json)",
+        required: false,
+        description: "Product metadata as JSON",
+      },
+      {
+        value: "supplier_option_axes",
+        label: "Option Axes",
+        required: false,
+        description: "Variant option axes",
+      },
+      {
+        value: "supplier_variant_title",
+        label: "Variant Title",
+        required: false,
+        description: "Variant-specific title",
+      },
+      {
+        value: "supplier_thumbnail",
+        label: "Thumbnail",
+        required: false,
+        description: "Product thumbnail image URL",
+      },
+      {
+        value: "supplier_images_json",
+        label: "Images JSON (images_json)",
+        required: false,
+        description: "Product images as JSON object",
+      },
+    ],
+  },
 ];
 
 // Flatten all fields for easier lookup
@@ -287,13 +352,19 @@ const allTargetFields = fieldCategories.flatMap((cat) => cat.fields);
 function suggestMapping(sourceColumn: string): string | null {
   const lower = sourceColumn.toLowerCase();
 
-  // Title mappings
+  // Subtitle mappings (from suppliers) - check BEFORE title (since subtitle contains "title")
+  if (lower.includes("subtitle")) {
+    return "supplier_subtitle"; // Map subtitle to subtitle field
+  }
+
+  // Title mappings (including supplier format)
   if (
     lower.includes("title") ||
     lower.includes("name") ||
     lower.includes("product")
   ) {
     if (lower.includes("fr") || lower.includes("french")) return "title_fr";
+    if (lower.includes("variant_title")) return "title_en"; // Supplier variant_title
     return "title_en";
   }
 
@@ -308,8 +379,14 @@ function suggestMapping(sourceColumn: string): string | null {
     return "description_en";
   }
 
-  // Price/Cost mappings
-  if (lower.includes("cost") || lower.includes("supplier price")) {
+  // Price/Cost mappings (including supplier amount_minor)
+  // Cost is always stored in USD in the database
+  if (
+    lower.includes("cost") ||
+    lower.includes("supplier price") ||
+    lower.includes("amount_minor") ||
+    (lower.includes("amount") && lower.includes("minor"))
+  ) {
     return "cost";
   }
   if (lower.includes("selling") || lower.includes("retail") || lower.includes("price")) {
@@ -326,22 +403,59 @@ function suggestMapping(sourceColumn: string): string | null {
   if (lower.includes("meta desc") || lower.includes("seo desc")) {
     return "meta_description";
   }
+
+  // Supplier URLs - check BEFORE handle/slug to avoid false matches
+  if (
+    lower.includes("marketplace_url") ||
+    lower.includes("marketplace url") ||
+    (lower.includes("marketplace") && lower.includes("url")) ||
+    (lower.includes("supplier") && lower.includes("url")) ||
+    (lower.includes("product") && lower.includes("url") && !lower.includes("image"))
+  ) {
+    return "marketplace_url";
+  }
+
   if (lower.includes("handle") || lower.includes("slug") || lower.includes("url")) {
     return "handle";
   }
 
-  // Physical attributes
-  if (lower.includes("weight")) return "weight";
-  if (lower.includes("length") || lower.includes("long")) return "length";
-  if (lower.includes("width") || lower.includes("wide")) return "width";
-  if (lower.includes("height") || lower.includes("tall") || lower.includes("high")) {
+  // Physical attributes (including supplier format with units)
+  if (lower.includes("weight") || lower.includes("weight_grams")) {
+    return "weight";
+  }
+  if (
+    lower.includes("length") ||
+    lower.includes("long") ||
+    lower.includes("length_mm")
+  ) {
+    return "length";
+  }
+  if (
+    lower.includes("width") ||
+    lower.includes("wide") ||
+    lower.includes("width_mm")
+  ) {
+    return "width";
+  }
+  if (
+    lower.includes("height") ||
+    lower.includes("tall") ||
+    lower.includes("high") ||
+    lower.includes("height_mm")
+  ) {
     return "height";
   }
   if (lower.includes("material") || lower.includes("fabric")) return "material";
 
-  // Inventory
+  // Inventory (including supplier format)
   if (lower.includes("sku") || lower === "sku") return "sku";
-  if (lower.includes("currency") || lower.includes("curr")) return "currency";
+  if (
+    lower.includes("currency") ||
+    lower.includes("curr") ||
+    lower.includes("currency_code")
+  ) {
+    return "currency";
+  }
   if (lower.includes("status") || lower.includes("state")) return "status";
 
   // Organization
@@ -352,14 +466,24 @@ function suggestMapping(sourceColumn: string): string | null {
   }
   if (lower.includes("tag")) return "tags";
 
-  // Shipping
-  if (lower.includes("origin") || lower.includes("country")) {
+  // Shipping (including supplier format)
+  if (
+    lower.includes("origin") ||
+    lower.includes("country") ||
+    lower.includes("origin_country")
+  ) {
     return "origin_country";
   }
   if (lower.includes("hs code") || lower.includes("hs_code")) return "hs_code";
   if (lower.includes("mid code") || lower.includes("mid_code")) return "mid_code";
 
-  // Images
+  // Images - handle different image fields
+  if (lower.includes("thumbnail")) {
+    return "supplier_thumbnail";
+  }
+  if (lower.includes("images_json") || (lower.includes("images") && lower.includes("json"))) {
+    return "supplier_images_json";
+  }
   if (
     lower.includes("image") ||
     lower.includes("photo") ||
@@ -395,6 +519,18 @@ function suggestMapping(sourceColumn: string): string | null {
   ) {
     return "specifications";
   }
+
+  // Supplier specific fields
+  if (lower === "pid" || lower.includes("pid")) return "supplier_pid";
+  if (lower === "vid" || lower.includes("vid")) return "supplier_vid";
+  if (lower.includes("option_map_json") || lower.includes("option_map")) {
+    return "supplier_option_map";
+  }
+  if (lower.includes("metadata_json") || (lower.includes("metadata") && lower.includes("json"))) {
+    return "supplier_metadata";
+  }
+  if (lower.includes("option_axes")) return "supplier_option_axes";
+  if (lower.includes("variant_title")) return "supplier_variant_title";
 
   return null;
 }
@@ -570,11 +706,10 @@ export function ColumnMapper({
                   return (
                     <div
                       key={field.value}
-                      className={`rounded-md border p-2 text-xs ${
-                        isMapped
-                          ? "bg-green-50 border-green-200 dark:bg-green-900/20"
-                          : "bg-background"
-                      }`}
+                      className={`rounded-md border p-2 text-xs ${isMapped
+                        ? "bg-green-50 border-green-200 dark:bg-green-900/20"
+                        : "bg-background"
+                        }`}
                     >
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{field.label}</span>

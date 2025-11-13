@@ -58,6 +58,7 @@ export async function saveDraft(
     supplierId: string;
     titleEn?: string;
     titleFr?: string;
+    subtitle?: string;
     descriptionEn?: string;
     descriptionFr?: string;
     metaTitle?: string;
@@ -66,6 +67,25 @@ export async function saveDraft(
     cost: string;
     sellingPrice?: string;
     margin?: string;
+    // Dedicated columns
+    sku?: string;
+    handle?: string;
+    currency?: string;
+    supplierProductId?: string;
+    supplierVariantId?: string;
+    marketplaceUrl?: string;
+    weight?: string;
+    length?: string;
+    width?: string;
+    height?: string;
+    material?: string;
+    originCountry?: string;
+    hsCode?: string;
+    midCode?: string;
+    type?: string;
+    collectionId?: string;
+    categoryIds?: string[];
+    tags?: string[];
     specifications?: Record<string, unknown>;
     status?: "draft" | "enriched" | "ready" | "published" | "archived";
   }
@@ -106,6 +126,7 @@ export async function saveDraft(
           supplierId: validated.supplierId,
           titleEn: validated.titleEn,
           titleFr: validated.titleFr,
+          subtitle: data.subtitle || undefined,
           descriptionEn: validated.descriptionEn,
           descriptionFr: validated.descriptionFr,
           metaTitle: validated.metaTitle,
@@ -114,6 +135,25 @@ export async function saveDraft(
           cost: validated.cost.toString(),
           sellingPrice: validated.sellingPrice?.toString(),
           margin: validated.margin?.toString(),
+          // Dedicated columns
+          sku: data.sku || undefined,
+          handle: data.handle || undefined,
+          currency: data.currency || "USD", // Always USD
+          supplierProductId: data.supplierProductId || undefined,
+          supplierVariantId: data.supplierVariantId || undefined,
+          marketplaceUrl: data.marketplaceUrl || undefined,
+          weight: data.weight ? data.weight.toString() : undefined,
+          length: data.length ? data.length.toString() : undefined,
+          width: data.width ? data.width.toString() : undefined,
+          height: data.height ? data.height.toString() : undefined,
+          material: data.material || undefined,
+          originCountry: data.originCountry || undefined,
+          hsCode: data.hsCode || undefined,
+          midCode: data.midCode || undefined,
+          type: data.type || undefined,
+          collectionId: data.collectionId || undefined,
+          categoryIds: data.categoryIds || undefined,
+          tags: data.tags || undefined,
           specifications: validated.specifications,
           status: validated.status,
           updatedAt: new Date(),
@@ -132,6 +172,7 @@ export async function saveDraft(
           supplierId: validated.supplierId,
           titleEn: validated.titleEn,
           titleFr: validated.titleFr,
+          subtitle: data.subtitle || undefined,
           descriptionEn: validated.descriptionEn,
           descriptionFr: validated.descriptionFr,
           metaTitle: validated.metaTitle,
@@ -140,6 +181,25 @@ export async function saveDraft(
           cost: validated.cost.toString(),
           sellingPrice: validated.sellingPrice?.toString(),
           margin: validated.margin?.toString(),
+          // Dedicated columns
+          sku: data.sku || undefined,
+          handle: data.handle || undefined,
+          currency: data.currency || "USD", // Always USD
+          supplierProductId: data.supplierProductId || undefined,
+          supplierVariantId: data.supplierVariantId || undefined,
+          marketplaceUrl: data.marketplaceUrl || undefined,
+          weight: data.weight ? data.weight.toString() : undefined,
+          length: data.length ? data.length.toString() : undefined,
+          width: data.width ? data.width.toString() : undefined,
+          height: data.height ? data.height.toString() : undefined,
+          material: data.material || undefined,
+          originCountry: data.originCountry || undefined,
+          hsCode: data.hsCode || undefined,
+          midCode: data.midCode || undefined,
+          type: data.type || undefined,
+          collectionId: data.collectionId || undefined,
+          categoryIds: data.categoryIds || undefined,
+          tags: data.tags || undefined,
           specifications: validated.specifications,
           status: validated.status,
         })

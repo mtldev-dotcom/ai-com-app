@@ -65,21 +65,29 @@ export default function DraftDetailPage() {
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [subtitle, setSubtitle] = useState("");
   const [cost, setCost] = useState("");
   const [margin, setMargin] = useState(30);
   const [sellingPrice, setSellingPrice] = useState("");
-  // Medusa-specific fields (stored in specifications JSONB)
+  // Product identification fields (dedicated columns)
   const [handle, setHandle] = useState("");
-  const [currency, setCurrency] = useState("CAD");
+  const [currency, setCurrency] = useState("USD"); // All currency is USD
   const [sku, setSku] = useState("");
+  // Supplier fields (dedicated columns)
+  const [supplierProductId, setSupplierProductId] = useState("");
+  const [supplierVariantId, setSupplierVariantId] = useState("");
+  const [marketplaceUrl, setMarketplaceUrl] = useState("");
+  // Physical attributes (dedicated columns)
   const [weight, setWeight] = useState("");
   const [length, setLength] = useState("");
   const [height, setHeight] = useState("");
   const [width, setWidth] = useState("");
+  const [material, setMaterial] = useState("");
+  // Shipping & Customs (dedicated columns)
   const [originCountry, setOriginCountry] = useState("");
   const [hsCode, setHsCode] = useState("");
   const [midCode, setMidCode] = useState("");
-  const [material, setMaterial] = useState("");
+  // Product organization (dedicated columns)
   const [typeId, setTypeId] = useState(""); // For product type ID from Medusa
   const [type, setType] = useState(""); // For custom type string (legacy)
   const [collectionId, setCollectionId] = useState("");
@@ -101,6 +109,7 @@ export default function DraftDetailPage() {
             setSupplierId(product.supplierId);
             setTitleEn(product.titleEn || "");
             setTitleFr(product.titleFr || "");
+            setSubtitle(product.subtitle || "");
             setDescriptionEn(product.descriptionEn || "");
             setDescriptionFr(product.descriptionFr || "");
             setMetaTitle(product.metaTitle || "");
@@ -120,37 +129,38 @@ export default function DraftDetailPage() {
             } else {
               setSellingPrice(existingSellingPrice);
             }
+            // Read from dedicated columns (not specifications)
+            setHandle(product.handle || "");
+            setCurrency(product.currency || "USD"); // Default to USD
+            setSku(product.sku || "");
+            setSupplierProductId(product.supplierProductId || "");
+            setSupplierVariantId(product.supplierVariantId || "");
+            setMarketplaceUrl(product.marketplaceUrl || "");
+            setWeight(product.weight || "");
+            setLength(product.length || "");
+            setHeight(product.height || "");
+            setWidth(product.width || "");
+            setOriginCountry(product.originCountry || "");
+            setHsCode(product.hsCode || "");
+            setMidCode(product.midCode || "");
+            setMaterial(product.material || "");
+            setType(product.type || "");
+            setTypeId(""); // Type ID is not stored in dedicated column, check specs if needed
+            setCollectionId(product.collectionId || "");
+            setCategoryIds(product.categoryIds || []);
+            setTags(
+              Array.isArray(product.tags)
+                ? product.tags.join(", ")
+                : product.tags || ""
+            );
+            // Keep specifications for backward compatibility and additional fields
             const specs =
               (product.specifications as Record<string, unknown>) || {};
             setSpecifications(specs);
-            // Extract Medusa fields from specifications
-            setHandle((specs.handle as string) || "");
-            setCurrency((specs.currency_code as string) || "CAD");
-            setSku((specs.sku as string) || "");
-            setWeight((specs.weight as string) || "");
-            setLength((specs.length as string) || "");
-            setHeight((specs.height as string) || "");
-            setWidth((specs.width as string) || "");
-            setOriginCountry((specs.origin_country as string) || "");
-            setHsCode((specs.hs_code as string) || "");
-            setMidCode((specs.mid_code as string) || "");
-            setMaterial((specs.material as string) || "");
-            setType((specs.type as string) || "");
-            setTypeId((specs.type_id as string) || "");
-            setCollectionId((specs.collection_id as string) || "");
-            setCategoryIds(
-              Array.isArray(specs.category_ids)
-                ? (specs.category_ids as string[])
-                : specs.category_id
-                  ? [specs.category_id as string]
-                  : []
-            );
-            setTags(
-              (specs.tags as string) ||
-                (Array.isArray(specs.tags)
-                  ? (specs.tags as string[]).join(", ")
-                  : "")
-            );
+            // Extract type_id from specifications if needed
+            if (!type && specs.type_id) {
+              setTypeId(specs.type_id as string);
+            }
             setStatus(product.status);
           }
           setLoading(false);
@@ -186,36 +196,24 @@ export default function DraftDetailPage() {
     setSuccess(null);
 
     try {
-      // Merge Medusa fields into specifications
+      // Keep specifications for backward compatibility and additional supplier fields
+      // But save dedicated columns separately
       const updatedSpecifications = {
         ...specifications,
-        handle: handle || undefined,
-        currency_code: currency,
-        sku: sku || undefined,
-        weight: weight ? parseFloat(weight) : undefined,
-        length: length ? parseFloat(length) : undefined,
-        height: height ? parseFloat(height) : undefined,
-        width: width ? parseFloat(width) : undefined,
-        origin_country: originCountry || undefined,
-        hs_code: hsCode || undefined,
-        mid_code: midCode || undefined,
-        material: material || undefined,
-        type: type || typeId || undefined,
-        type_id: typeId || undefined,
-        collection_id: collectionId || undefined,
-        category_ids: categoryIds.length > 0 ? categoryIds : undefined,
-        tags: tags
-          ? tags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          : undefined,
+        // Keep supplier-specific fields in specifications for reference
+        pid: supplierProductId || specifications.pid,
+        vid: supplierVariantId || specifications.vid,
+        marketplace_url: marketplaceUrl || specifications.marketplace_url,
+        subtitle: subtitle || specifications.subtitle,
+        // Keep type_id in specifications if using Medusa type selector
+        type_id: typeId || specifications.type_id,
       };
 
       await saveDraft(id || null, {
         supplierId,
         titleEn,
         titleFr,
+        subtitle,
         descriptionEn,
         descriptionFr,
         metaTitle,
@@ -224,6 +222,30 @@ export default function DraftDetailPage() {
         cost,
         sellingPrice,
         margin: margin.toString(),
+        // Dedicated columns
+        sku,
+        handle,
+        currency: "USD", // Always USD
+        supplierProductId,
+        supplierVariantId,
+        marketplaceUrl,
+        weight,
+        length,
+        width,
+        height,
+        material,
+        originCountry,
+        hsCode,
+        midCode,
+        type,
+        collectionId,
+        categoryIds,
+        tags: tags
+          ? tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+          : [],
         specifications: updatedSpecifications,
         status,
       });
@@ -644,6 +666,18 @@ export default function DraftDetailPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="subtitle">Subtitle</Label>
+                      <Input
+                        id="subtitle"
+                        value={subtitle}
+                        onChange={(e) => setSubtitle(e.target.value)}
+                        placeholder="Product subtitle (optional)"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Short product subtitle or tagline
+                      </p>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="descriptionEn">Description</Label>
                       <div className="relative">
                         <Textarea
@@ -766,6 +800,51 @@ export default function DraftDetailPage() {
 
             <Card>
               <CardHeader>
+                <CardTitle>Supplier Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="supplierProductId">Supplier Product ID (PID)</Label>
+                  <Input
+                    id="supplierProductId"
+                    value={supplierProductId}
+                    onChange={(e) => setSupplierProductId(e.target.value)}
+                    placeholder="Supplier's product identifier"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Product ID from supplier system
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supplierVariantId">Supplier Variant ID (VID)</Label>
+                  <Input
+                    id="supplierVariantId"
+                    value={supplierVariantId}
+                    onChange={(e) => setSupplierVariantId(e.target.value)}
+                    placeholder="Supplier's variant identifier"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Variant ID from supplier system
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="marketplaceUrl">Marketplace URL</Label>
+                  <Input
+                    id="marketplaceUrl"
+                    value={marketplaceUrl}
+                    onChange={(e) => setMarketplaceUrl(e.target.value)}
+                    placeholder="https://www.supplier.com/product/123"
+                    type="url"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    URL to product on supplier's marketplace site
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Specifications</CardTitle>
               </CardHeader>
               <CardContent>
@@ -804,7 +883,7 @@ export default function DraftDetailPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="sellingPrice">
-                    Selling Price ({currency}) *
+                    Selling Price (USD) *
                   </Label>
                   <Input
                     id="sellingPrice"
@@ -817,23 +896,8 @@ export default function DraftDetailPage() {
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required for publishing to Medusa
+                    Required for publishing to Medusa. All prices are in USD.
                   </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency *</Label>
-                  <select
-                    id="currency"
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="CAD">CAD (Canadian Dollar)</option>
-                    <option value="USD">USD (US Dollar)</option>
-                    <option value="EUR">EUR (Euro)</option>
-                    <option value="GBP">GBP (British Pound)</option>
-                  </select>
                 </div>
 
                 <div className="space-y-2">
@@ -968,7 +1032,7 @@ export default function DraftDetailPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="weight">Weight (kg)</Label>
+                    <Label htmlFor="weight">Weight (grams)</Label>
                     <Input
                       id="weight"
                       type="number"
@@ -981,7 +1045,7 @@ export default function DraftDetailPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="length">Length (cm)</Label>
+                    <Label htmlFor="length">Length (mm)</Label>
                     <Input
                       id="length"
                       type="number"
@@ -994,7 +1058,7 @@ export default function DraftDetailPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="height">Height (cm)</Label>
+                    <Label htmlFor="height">Height (mm)</Label>
                     <Input
                       id="height"
                       type="number"
@@ -1007,7 +1071,7 @@ export default function DraftDetailPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="width">Width (cm)</Label>
+                    <Label htmlFor="width">Width (mm)</Label>
                     <Input
                       id="width"
                       type="number"
@@ -1114,11 +1178,11 @@ export default function DraftDetailPage() {
                     onChange={(e) =>
                       setStatus(
                         e.target.value as
-                          | "draft"
-                          | "enriched"
-                          | "ready"
-                          | "published"
-                          | "archived"
+                        | "draft"
+                        | "enriched"
+                        | "ready"
+                        | "published"
+                        | "archived"
                       )
                     }
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

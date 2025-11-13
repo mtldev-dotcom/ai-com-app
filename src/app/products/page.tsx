@@ -142,6 +142,11 @@ export default function ProductsPage() {
     total: number;
     currentProduct: string;
   } | null>(null);
+  // Image popup state
+  const [imagePopup, setImagePopup] = useState<{
+    product: ProductDraft;
+    currentIndex: number;
+  } | null>(null);
 
   useEffect(() => {
     if (activeTab === "local") {
@@ -402,7 +407,7 @@ export default function ProductsPage() {
         // Reload product data to get latest after enrichment
         const refreshedProducts = await getAllProductDraftsAction();
         const refreshedProduct = refreshedProducts.find((p) => p.product.id === productId);
-        
+
         // Calculate 30% margin and selling price
         if (refreshedProduct?.product.cost) {
           const cost = parseFloat(refreshedProduct.product.cost) || 0;
@@ -460,11 +465,11 @@ export default function ProductsPage() {
           results: prev.results.map((r) =>
             r.id === productId
               ? {
-                  ...r,
-                  status: "error",
-                  error:
-                    error instanceof Error ? error.message : "Unknown error",
-                }
+                ...r,
+                status: "error",
+                error:
+                  error instanceof Error ? error.message : "Unknown error",
+              }
               : r
           ),
         }));
@@ -576,8 +581,7 @@ export default function ProductsPage() {
 
     if (
       !confirm(
-        `Are you sure you want to import ${unsyncedProducts.length} product${
-          unsyncedProducts.length !== 1 ? "s" : ""
+        `Are you sure you want to import ${unsyncedProducts.length} product${unsyncedProducts.length !== 1 ? "s" : ""
         }?`
       )
     ) {
@@ -622,8 +626,7 @@ export default function ProductsPage() {
 
       if (errorCount === 0) {
         alert(
-          `Successfully imported ${successCount} product${
-            successCount !== 1 ? "s" : ""
+          `Successfully imported ${successCount} product${successCount !== 1 ? "s" : ""
           }!`
         );
       } else {
@@ -789,6 +792,9 @@ export default function ProductsPage() {
                   <table className="w-full text-sm">
                     <thead className="border-b bg-muted">
                       <tr>
+                        <th className="w-16 px-4 py-3 text-left font-medium">
+                          #
+                        </th>
                         <th className="w-12 px-4 py-3">
                           <Checkbox
                             checked={isAllSelected}
@@ -823,15 +829,17 @@ export default function ProductsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {localProducts.map(({ product, supplier }) => (
+                      {localProducts.map(({ product, supplier }, index) => (
                         <tr
                           key={product.id}
-                          className={`border-b transition-colors ${
-                            selectedProducts.has(product.id)
-                              ? "bg-muted"
-                              : "hover:bg-muted/50"
-                          }`}
+                          className={`border-b transition-colors ${selectedProducts.has(product.id)
+                            ? "bg-muted"
+                            : "hover:bg-muted/50"
+                            }`}
                         >
+                          <td className="w-16 px-4 py-3 text-sm text-muted-foreground">
+                            {index + 1}
+                          </td>
                           <td className="w-12 px-4 py-3">
                             <Checkbox
                               checked={selectedProducts.has(product.id)}
@@ -849,30 +857,33 @@ export default function ProductsPage() {
                               {language === "en"
                                 ? product.titleEn || product.titleFr || "Untitled"
                                 : product.titleFr ||
-                                  product.titleEn ||
-                                  "Sans titre"}
+                                product.titleEn ||
+                                "Sans titre"}
                             </div>
                             {(language === "en"
                               ? product.descriptionEn
                               : product.descriptionFr) && (
-                              <div className="text-xs text-muted-foreground line-clamp-1">
-                                {language === "en"
-                                  ? product.descriptionEn
-                                  : product.descriptionFr}
-                              </div>
-                            )}
+                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                  {language === "en"
+                                    ? product.descriptionEn
+                                    : product.descriptionFr}
+                                </div>
+                              )}
                           </td>
                           <td className="px-4 py-3">
                             {product.images && product.images.length > 0 ? (
-                              <div className="relative h-16 w-16 overflow-hidden rounded border bg-muted">
+                              <div
+                                className="relative h-16 w-16 overflow-hidden rounded border bg-muted cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => setImagePopup({ product, currentIndex: 0 })}
+                              >
                                 <img
                                   src={product.images[0]}
                                   alt={
                                     language === "en"
                                       ? product.titleEn || product.titleFr || "Product"
                                       : product.titleFr ||
-                                        product.titleEn ||
-                                        "Produit"
+                                      product.titleEn ||
+                                      "Produit"
                                   }
                                   className="h-full w-full object-cover"
                                   loading="lazy"
@@ -995,44 +1006,44 @@ export default function ProductsPage() {
           <TabsContent value="medusa" className="space-y-4">
             {medusaProducts.filter((p) => !isProductSynced(p.id)).length >
               0 && (
-              <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4">
-                <div>
-                  <p className="text-sm font-medium">
-                    {medusaProducts.filter((p) => !isProductSynced(p.id))
-                      .length}{" "}
-                    product
-                    {medusaProducts.filter((p) => !isProductSynced(p.id))
-                      .length !== 1
-                      ? "s"
-                      : ""}{" "}
-                    available to import
-                  </p>
-                  {bulkImportProgress && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Importing: {bulkImportProgress.currentProduct} (
-                      {bulkImportProgress.current}/{bulkImportProgress.total})
+                <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {medusaProducts.filter((p) => !isProductSynced(p.id))
+                        .length}{" "}
+                      product
+                      {medusaProducts.filter((p) => !isProductSynced(p.id))
+                        .length !== 1
+                        ? "s"
+                        : ""}{" "}
+                      available to import
                     </p>
-                  )}
+                    {bulkImportProgress && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Importing: {bulkImportProgress.currentProduct} (
+                        {bulkImportProgress.current}/{bulkImportProgress.total})
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    onClick={handleBulkImport}
+                    disabled={bulkImporting}
+                    size="sm"
+                  >
+                    {bulkImporting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="mr-2 h-4 w-4" />
+                        Import All
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleBulkImport}
-                  disabled={bulkImporting}
-                  size="sm"
-                >
-                  {bulkImporting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Importing...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="mr-2 h-4 w-4" />
-                      Import All
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+              )}
             {loadingMedusa ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -1075,7 +1086,7 @@ export default function ProductsPage() {
                 </Button>
               </div>
             ) : medusaProducts.filter((p) => !isProductSynced(p.id))
-                .length === 0 ? (
+              .length === 0 ? (
               <div className="rounded-lg border p-12 text-center">
                 <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
                 <h3 className="mt-4 text-lg font-semibold">All Products Synced</h3>
@@ -1169,11 +1180,10 @@ export default function ProductsPage() {
                                 </Button>
                                 {syncMessages[product.id] && (
                                   <span
-                                    className={`text-xs ${
-                                      syncMessages[product.id].type === "success"
-                                        ? "text-green-600"
-                                        : "text-destructive"
-                                    }`}
+                                    className={`text-xs ${syncMessages[product.id].type === "success"
+                                      ? "text-green-600"
+                                      : "text-destructive"
+                                      }`}
                                   >
                                     {syncMessages[product.id].message}
                                   </span>
@@ -1319,10 +1329,10 @@ export default function ProductsPage() {
                 <span className="text-muted-foreground">
                   {enrichmentProgress.total > 0
                     ? Math.round(
-                        (enrichmentProgress.current /
-                          enrichmentProgress.total) *
-                          100
-                      )
+                      (enrichmentProgress.current /
+                        enrichmentProgress.total) *
+                      100
+                    )
                     : 0}
                   %
                 </span>
@@ -1331,13 +1341,12 @@ export default function ProductsPage() {
                 <div
                   className="h-full bg-primary transition-all duration-500"
                   style={{
-                    width: `${
-                      enrichmentProgress.total > 0
-                        ? (enrichmentProgress.current /
-                            enrichmentProgress.total) *
-                          100
-                        : 0
-                    }%`,
+                    width: `${enrichmentProgress.total > 0
+                      ? (enrichmentProgress.current /
+                        enrichmentProgress.total) *
+                      100
+                      : 0
+                      }%`,
                   }}
                 />
               </div>
@@ -1394,13 +1403,12 @@ export default function ProductsPage() {
                     return (
                       <div
                         key={step}
-                        className={`flex flex-col items-center gap-2 rounded-md border p-3 ${
-                          isActive
-                            ? "border-primary bg-primary/5"
-                            : isCompleted
-                              ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                              : "border-muted bg-muted/50"
-                        }`}
+                        className={`flex flex-col items-center gap-2 rounded-md border p-3 ${isActive
+                          ? "border-primary bg-primary/5"
+                          : isCompleted
+                            ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                            : "border-muted bg-muted/50"
+                          }`}
                       >
                         {isCompleted ? (
                           <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -1410,13 +1418,12 @@ export default function ProductsPage() {
                           <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
                         )}
                         <span
-                          className={`text-xs font-medium ${
-                            isActive
-                              ? "text-primary"
-                              : isCompleted
-                                ? "text-green-600 dark:text-green-400"
-                                : "text-muted-foreground"
-                          }`}
+                          className={`text-xs font-medium ${isActive
+                            ? "text-primary"
+                            : isCompleted
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-muted-foreground"
+                            }`}
                         >
                           {step}
                         </span>
@@ -1485,6 +1492,126 @@ export default function ProductsPage() {
               {isBulkEnriching ? "Processing..." : "Close"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Popup Dialog */}
+      <Dialog
+        open={imagePopup !== null}
+        onOpenChange={(open) => !open && setImagePopup(null)}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {imagePopup && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {language === "en"
+                    ? imagePopup.product.titleEn || imagePopup.product.titleFr || "Product Images"
+                    : imagePopup.product.titleFr ||
+                    imagePopup.product.titleEn ||
+                    "Images du produit"}
+                </DialogTitle>
+                <DialogDescription>
+                  {imagePopup.product.images && imagePopup.product.images.length > 0
+                    ? `Image ${imagePopup.currentIndex + 1} of ${imagePopup.product.images.length}`
+                    : "No images available"}
+                </DialogDescription>
+              </DialogHeader>
+
+              {imagePopup.product.images && imagePopup.product.images.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Main Image */}
+                  <div className="relative w-full overflow-hidden rounded-lg border bg-muted">
+                    <img
+                      src={imagePopup.product.images[imagePopup.currentIndex]}
+                      alt={`Product image ${imagePopup.currentIndex + 1}`}
+                      className="w-full h-auto max-h-[60vh] object-contain mx-auto"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+
+                  {/* Navigation Buttons */}
+                  {imagePopup.product.images.length > 1 && (
+                    <div className="flex items-center justify-between gap-4">
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setImagePopup({
+                            ...imagePopup,
+                            currentIndex:
+                              imagePopup.currentIndex > 0
+                                ? imagePopup.currentIndex - 1
+                                : imagePopup.product.images!.length - 1,
+                          })
+                        }
+                        disabled={imagePopup.product.images.length <= 1}
+                      >
+                        Previous
+                      </Button>
+
+                      <div className="flex gap-2 flex-wrap justify-center">
+                        {imagePopup.product.images.map((img, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() =>
+                              setImagePopup({ ...imagePopup, currentIndex: idx })
+                            }
+                            className={`h-16 w-16 overflow-hidden rounded border transition-all ${idx === imagePopup.currentIndex
+                              ? "ring-2 ring-primary border-primary"
+                              : "hover:border-primary/50"
+                              }`}
+                          >
+                            <img
+                              src={img}
+                              alt={`Thumbnail ${idx + 1}`}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setImagePopup({
+                            ...imagePopup,
+                            currentIndex:
+                              imagePopup.currentIndex <
+                                imagePopup.product.images!.length - 1
+                                ? imagePopup.currentIndex + 1
+                                : 0,
+                          })
+                        }
+                        disabled={imagePopup.product.images.length <= 1}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Image URL */}
+                  <div className="rounded-lg border bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Image URL:
+                    </p>
+                    <code className="text-xs break-all">
+                      {imagePopup.product.images[imagePopup.currentIndex]}
+                    </code>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No images available</p>
+                </div>
+              )}
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>

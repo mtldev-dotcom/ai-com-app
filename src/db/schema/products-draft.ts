@@ -24,6 +24,7 @@ export const productDraftStatusEnum = pgEnum("product_draft_status", [
  * Products draft table
  * Stores product information before publication to Medusa
  * Supports bilingual content (FR/EN) for Nick a Deal
+ * Includes supplier fields and flexible specifications
  */
 export const productsDraft = pgTable("products_draft", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -33,6 +34,7 @@ export const productsDraft = pgTable("products_draft", {
   // Bilingual titles
   titleFr: text("title_fr"),
   titleEn: text("title_en"),
+  subtitle: text("subtitle"), // Product subtitle (from suppliers)
   // Bilingual descriptions
   descriptionFr: text("description_fr"),
   descriptionEn: text("description_en"),
@@ -41,11 +43,35 @@ export const productsDraft = pgTable("products_draft", {
   metaDescription: text("meta_description"),
   // Images (array of URLs)
   images: jsonb("images").$type<string[]>(),
-  // Pricing
-  cost: numeric("cost", { precision: 10, scale: 2 }).notNull(), // Supplier cost
+  // Pricing (all costs are stored in USD)
+  cost: numeric("cost", { precision: 10, scale: 2 }).notNull(), // Supplier cost in USD
   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }), // Calculated selling price
   margin: numeric("margin", { precision: 5, scale: 2 }), // Margin percentage
-  // Specifications (JSON field for flexible specs)
+  // Product identification
+  sku: text("sku"), // Stock Keeping Unit
+  handle: text("handle"), // URL-friendly slug
+  currency: text("currency"), // Currency code (e.g., USD, CAD)
+  // Supplier identifiers (important for tracking products from suppliers)
+  supplierProductId: text("supplier_product_id"), // Supplier's product ID (pid)
+  supplierVariantId: text("supplier_variant_id"), // Supplier's variant ID (vid)
+  marketplaceUrl: text("marketplace_url"), // URL to product on supplier's marketplace site
+  // Physical attributes
+  weight: numeric("weight", { precision: 10, scale: 2 }), // Weight in grams
+  length: numeric("length", { precision: 10, scale: 2 }), // Length in mm
+  width: numeric("width", { precision: 10, scale: 2 }), // Width in mm
+  height: numeric("height", { precision: 10, scale: 2 }), // Height in mm
+  material: text("material"), // Material composition
+  // Shipping & Customs
+  originCountry: text("origin_country"), // Country of origin (ISO code)
+  hsCode: text("hs_code"), // Harmonized System customs code
+  midCode: text("mid_code"), // Manufacturer ID code
+  // Product organization
+  type: text("type"), // Product type/category
+  collectionId: text("collection_id"), // Medusa collection identifier
+  categoryIds: jsonb("category_ids").$type<string[]>(), // Array of category IDs
+  tags: jsonb("tags").$type<string[]>(), // Array of tags
+  // Specifications (JSON field for flexible specs and supplier-specific fields)
+  // Stores: pid, vid, option_map_json, metadata_json, option_axes, variant_title, subtitle, thumbnail, etc.
   specifications: jsonb("specifications").$type<Record<string, unknown>>(),
   // Status
   status: productDraftStatusEnum("status").notNull().default("draft"),

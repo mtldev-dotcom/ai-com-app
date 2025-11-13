@@ -6,10 +6,18 @@ import { parseCSV, parseXLSX, type ParseResult } from "./parse-file";
 
 /**
  * Convert Google Sheets edit URL to CSV export URL
- * Example: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit?gid=GID
+ * Handles multiple Google Sheets URL formats:
+ * - Edit URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit?gid=GID
+ * - View URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/viewform?gid=GID
+ * - Direct export URL (already correct): https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/export?format=csv&gid=GID
  * Returns: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/export?format=csv&gid=GID
  */
 function convertGoogleSheetsUrl(url: string): string {
+  // Check if it's already an export URL
+  if (url.includes("/export?format=csv")) {
+    return url;
+  }
+
   // Check if it's a Google Sheets URL
   const googleSheetsMatch = url.match(
     /docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
@@ -17,8 +25,12 @@ function convertGoogleSheetsUrl(url: string): string {
 
   if (googleSheetsMatch) {
     const spreadsheetId = googleSheetsMatch[1];
-    // Extract GID from URL (can be in query params or hash)
-    const gidMatch = url.match(/[#&]gid=(\d+)/) || url.match(/gid=(\d+)/);
+    // Extract GID from URL (can be in query params, hash, or path)
+    // Try multiple patterns to catch different URL formats
+    const gidMatch =
+      url.match(/[#&?]gid=(\d+)/) ||
+      url.match(/\/gid\/(\d+)/) ||
+      url.match(/gid=(\d+)/);
     const gid = gidMatch ? gidMatch[1] : "0";
 
     // Return CSV export URL
