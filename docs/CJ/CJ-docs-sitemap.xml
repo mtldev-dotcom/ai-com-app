@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+<!-- created with Free Online Sitemap Generator www.xml-sitemaps.com -->
+
+
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/introduction.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>1.00</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/development.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/token.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/utils.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/webhook.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/start/sandbox.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/definition.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/field.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/limit.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/ps-code.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/ps-logistics.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/standard/ps-country.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/auth.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/setting.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/product.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/storage.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/shopping.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/logistic.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/dispute.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+<url>
+  <loc>https://developers.cjdropshipping.com/en/api/api2/api/webhook.html</loc>
+  <lastmod>2025-11-04T08:21:22+00:00</lastmod>
+  <priority>0.80</priority>
+</url>
+
+
+</urlset>

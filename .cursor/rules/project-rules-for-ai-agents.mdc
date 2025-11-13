@@ -1,0 +1,150 @@
+---
+alwaysApply: true
+---
+# Cursor / Claude Code Rules – AI E‑Commerce Management Project
+
+These rules define how AI coding agents (Cursor, Claude Code, or others) must operate during the build of **AI E‑Commerce Management** — the Nick a Deal Admin Tool.
+
+---
+
+## 🧭 Repository Structure
+
+All agents **must respect the project structure** and place files in the correct directories.
+
+### Root Layout
+
+```
+/ (repo root)
+│
+├── docs/             # 📘 Markdown documentation (PRDs, build plans, notes)
+│   ├── prd.md
+│   ├── step-guide.md
+│   ├── cursor-rules.md
+│   └── ...
+│
+├── .dev/             # 🧪 Internal development notes and temp assets
+│   ├── images/       # Screenshots, design refs, drafts
+│   ├── notes.md
+│   └── ...
+│   → Agents must IGNORE this folder (never commit code or reference paths here)
+│
+├── ai-com-app/       # 🧠 Next.js 15 main app
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   ├── db/
+│   │   ├── workers/
+│   │   └── types/
+│   ├── package.json
+│   ├── next.config.js
+│   └── tsconfig.json
+│
+└── docker-compose.yml  # (added later)
+```
+
+> 🧩 **Always verify folder path before file creation.** Never create stray files at root or misplace code inside `/docs` or `/.dev`.
+
+---
+
+## 🧱 Development Environment Rules
+
+* **OS:** Windows 11 (primary). Use only Windows‑compatible shell syntax.
+
+  * ❌ Do **not** chain commands with `&&`.
+  * ✅ Use one command per line or write explicit scripts inside `package.json`.
+* Never assume `bash`, `zsh`, or Unix‑specific utilities are available.
+* Always use **cross‑platform Node commands**.
+
+---
+
+## 🚫 Permission Restrictions
+
+AI agents **must not** execute or commit commands autonomously.
+
+### Forbidden Without User Approval
+
+| Action                     | Example                                  |
+| -------------------------- | ---------------------------------------- |
+| Start Dev Server           | `npm run dev`                            |
+| Build Project              | `npm run build`                          |
+| Database Reset or Deletion | `prisma migrate reset`, `dropdb`, etc.   |
+| Package Install            | `npm install` / `pnpm add`               |
+| Container Ops              | `docker compose up`, `docker exec`, etc. |
+| File Deletion              | `rm -rf`, `del`, etc.                    |
+
+> Only create the **code and configuration files** needed. Let the user run or execute commands manually.
+
+---
+
+## 🧩 Coding Guidelines
+
+1. **Work one step at a time** — follow the active task in `docs/step-guide.md`.
+2. **Never go beyond the assigned step**. If unsure, stop and ask.
+3. **Use TypeScript and Zod** for all data validation.
+4. **Naming Conventions**
+
+   * Components: `PascalCase`
+   * Hooks/Functions: `camelCase`
+   * Files: `kebab-case.tsx` or `.ts`
+   * Constants: `UPPER_SNAKE_CASE`
+5. **Comment functions** with JSDoc: purpose, params, return type.
+6. **Import paths** must use the alias `@/` for `src/`.
+7. **Organize by domain** — drafts, imports, ai, suppliers, etc.
+8. **UI Consistency:** Use Shadcn components; never inline large Tailwind blocks without reason.
+9. **Error Handling:** Use try/catch in all async server actions.
+10. **Testing:** After each step, verify testing checklist in PRD before continuing.
+
+---
+
+## 🧰 File & Commit Policy
+
+* **One feature = one commit.**
+* Commit message format: `feat(step-3): dashboard layout` or `fix(step-2): orm migration error`.
+* Do **not** commit generated `.env` files or secrets.
+* Keep commits minimal and isolated.
+
+---
+
+## 🧪 Testing Rules
+
+* Always create a minimal **Testing Flow** for every new feature (see `step-guide.md`).
+* Never skip manual validation steps like “Run migration → verify table.”
+* Automated tests must live under `ai-com-app/src/__tests__/`.
+
+---
+
+## 🧩 Communication & Behavior
+
+* When responding, agents should:
+
+  * ✅ Summarize what was done.
+  * ✅ List files modified.
+  * ✅ List testing steps.
+  * 🚫 Never generate unrelated code.
+  * 🚫 Never optimize or refactor outside the assigned task.
+
+---
+
+## 🪪 Identity & Context
+
+* Project codename: **AI E‑Commerce Management** (placeholder name; may change later).
+* Built for **Nick a Deal** ecosystem.
+* Next.js 15 + Supabase + Shadcn + Redis (BullMQ) stack.
+
+---
+
+## ✅ Summary of Obedience Rules
+
+| Rule                                 | Must Follow |
+| ------------------------------------ | ----------- |
+| Work only within active step         | ✅           |
+| Place code in correct directories    | ✅           |
+| Ask before running or committing     | ✅           |
+| Use Windows‑compatible commands only | ✅           |
+| Keep commits atomic                  | ✅           |
+| Never touch `.dev/` folder           | ✅           |
+| Always confirm Testing Flow          | ✅           |
+
+---
+

@@ -1,0 +1,70 @@
+[
+    {
+      "code": 200,
+      "result": true,
+      "message": "Success",
+      "data": {
+        "pageSize": 10,
+        "pageNumber": 1,
+        "totalRecords": 67,
+        "totalPages": 7,
+        "content": [
+          {
+            "productId": "627B03C2-2BE3-4B54-BCEE-25BD02BDAAD6",
+            "userId": null,
+            "packWeight": "26.00-34.00",
+            "weight": "6.00-14.00",
+            "productType": "0",
+            "propertyKeyList": [
+              "COMMON",
+              "THIN"
+            ],
+            "bigImage": "https://cf.cjdropshipping.com/15144768/3813306008_1441308584.400x400.jpg",
+            "nameEn": "8mm titanium ring",
+            "sku": "CJZBGJNS00106",
+            "isPod": 0,
+            "hasPacked": 0,
+            "folderId": [
+              2511040801521925000
+            ],
+            "createAt": 1762630191258,
+            "sellPrice": "2.22-2.40",
+            "discountPrice": null,
+            "discountPriceRate": null,
+            "defaultArea": "China Warehouse",
+            "shopMethod": null,
+            "trialCountry": null,
+            "trialFreight": "0",
+            "totalPrice": "2.22-2.40",
+            "listedShopNum": "0",
+            "listedShopIds": [],
+            "vid": "71DCAEA3-4B63-4A8F-A998-2F380B3612F6",
+            "areaId": "1",
+            "areaCountryCode": "CN",
+            "freightDiscount": "0",
+            "lengthList": [
+              100,
+              100
+            ],
+            "heightList": [
+              20,
+              20
+            ],
+            "widthList": [
+              100,
+              100
+            ],
+            "volumeList": [
+              200000,
+              200000
+            ],
+            "addMarkStatus": "0",
+            "isSafeProduct": true,
+            "hasVirPacked": null
+          }
+        ]
+      },
+      "requestId": "604cadcd42aa4594b11c88fc95918a78",
+      "success": true
+    }
+  ]

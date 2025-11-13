@@ -1,0 +1,12 @@
+title,description,cost,images,specifications
+Premium Bluetooth Headset,High-quality wireless headset with noise cancellation and 30h battery life,45.00,"https://example.com/images/headset-1.jpg, https://example.com/images/headset-2.jpg","{""battery"": ""30 hours"", ""connectivity"": ""Bluetooth 5.2"", ""weight"": ""250g""}"
+Smartwatch Fitness Pro,Smartwatch with GPS, heart rate monitor, and IP68 waterproof rating,120.00,https://example.com/images/smartwatch-1.jpg,"{""display"": ""1.4 inch AMOLED"", ""battery"": ""7 days"", ""sensors"": ""GPS, Heart Rate""}"
+Wireless Charger 15W,Fast wireless charger compatible with all Qi-enabled devices,15.00,https://example.com/images/charger-1.jpg,"{""power"": ""15W"", ""compatibility"": ""Qi Standard""}"
+USB-C Cable 2m,High-speed USB-C cable for charging and data transfer,8.50,"https://example.com/images/cable-1.jpg, https://example.com/images/cable-2.jpg","{""length"": ""2 meters"", ""speed"": ""480 Mbps"", ""power"": ""60W""}"
+Portable Power Bank 20000mAh,High-capacity power bank with fast charging and multiple ports,35.00,https://example.com/images/powerbank-1.jpg,"{""capacity"": ""20000mAh"", ""ports"": ""2 USB-A, 1 USB-C"", ""output"": ""18W""}"
+Bluetooth Speaker Waterproof,Portable speaker with 360° sound and IPX7 waterproof rating,55.00,"https://example.com/images/speaker-1.jpg, https://example.com/images/speaker-2.jpg, https://example.com/images/speaker-3.jpg","{""battery"": ""12 hours"", ""waterproof"": ""IPX7"", ""connectivity"": ""Bluetooth 5.0""}"
+Wireless Mouse Ergonomic,Ergonomic wireless mouse with 2.4GHz connectivity and 6 months battery,22.00,https://example.com/images/mouse-1.jpg,"{""connectivity"": ""2.4GHz USB dongle"", ""battery"": ""6 months"", ""dpi"": ""1600""}"
+Keyboard Mechanical RGB,Mechanical keyboard with RGB backlighting and Cherry MX switches,89.00,"https://example.com/images/keyboard-1.jpg, https://example.com/images/keyboard-2.jpg","{""switches"": ""Cherry MX Red"", ""layout"": ""104 keys"", ""backlight"": ""RGB""}"
+Monitor Stand Adjustable,Ergonomic monitor stand with height and tilt adjustment,28.00,https://example.com/images/stand-1.jpg,"{""max_weight"": ""9kg"", ""adjustment"": ""Height and tilt"", ""material"": ""Aluminum""}"
+Webcam HD 1080p,Full HD webcam with auto-focus and built-in microphone,45.00,"https://example.com/images/webcam-1.jpg, https://example.com/images/webcam-2.jpg","{""resolution"": ""1080p"", ""fps"": ""30"", ""microphone"": ""Built-in""}"
+

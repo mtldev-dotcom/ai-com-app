@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1761973166336,
+      "tag": "0000_acoustic_argent",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762041477553,
+      "tag": "0001_stormy_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762239896141,
+      "tag": "0002_numerous_gressill",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762286570272,
+      "tag": "0003_loud_invaders",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762391738106,
+      "tag": "0004_clear_nekra",
+      "breakpoints": true
+    }
+  ]
+}
