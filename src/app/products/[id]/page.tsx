@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Draft Detail Page
+ * Product Detail Page
  * Edit product draft with FR/EN tabs, images, specs, and price calculator
  */
 import { useEffect, useState, useRef } from "react";
@@ -22,6 +22,8 @@ import {
   enrichDraft,
   getProductDraftAction,
   syncDraftFromMedusa,
+  updateDraftToMedusaAction,
+  unpublishDraftAction,
 } from "@/app/actions/drafts";
 import { publishDraftAction } from "@/app/actions/medusa";
 import {
@@ -40,6 +42,8 @@ import {
 import { AIFillButton } from "@/components/drafts/ai-fill-button";
 import { MedusaEntitySelector } from "@/components/drafts/medusa-entity-selector";
 import { MedusaCategoryMultiSelect } from "@/components/drafts/medusa-category-multiselect";
+import { MedusaMultiSelect } from "@/components/drafts/medusa-multiselect";
+import { LocationInventoryManager } from "@/components/drafts/location-inventory-manager";
 import {
   generateTitleAction,
   generateDescriptionAction,
@@ -50,8 +54,9 @@ import {
 } from "@/app/actions/field-enrich";
 import { translateTextAction } from "@/app/actions/ai";
 import { generateSEOAction } from "@/app/actions/ai";
+import { hasDraftChanges } from "./utils";
 
-export default function DraftDetailPage() {
+export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -62,6 +67,8 @@ export default function DraftDetailPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [updatingToMedusa, setUpdatingToMedusa] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
   const [syncingToMedusa, setSyncingToMedusa] = useState(false);
   const [syncingFromMedusa, setSyncingFromMedusa] = useState(false);
   const [medusaProductId, setMedusaProductId] = useState<string | null>(null);
@@ -71,6 +78,7 @@ export default function DraftDetailPage() {
     "draft" | "enriched" | "ready" | "published" | "archived" | ""
   >("");
   const isManualPublishRef = useRef(false);
+  const initialDraftDataRef = useRef<ReturnType<typeof getDraftData> | null>(null);
 
   const [supplierId, setSupplierId] = useState("");
   const [titleEn, setTitleEn] = useState("");
@@ -110,6 +118,9 @@ export default function DraftDetailPage() {
   const [type, setType] = useState(""); // For custom type string (legacy)
   const [collectionId, setCollectionId] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]); // Multiple categories
+  const [salesChannelIds, setSalesChannelIds] = useState<string[]>([]); // Multiple sales channels
+  const [stockLocationIds, setStockLocationIds] = useState<string[]>([]); // Multiple stock locations
+  const [locationInventory, setLocationInventory] = useState<Record<string, number>>({}); // Inventory quantities per location
   const [tags, setTags] = useState("");
   const [specifications, setSpecifications] = useState<Record<string, unknown>>(
     {}
@@ -149,6 +160,9 @@ export default function DraftDetailPage() {
     type?: string | null;
     collectionId?: string | null;
     categoryIds?: string[] | null;
+    salesChannelIds?: string[] | null;
+    stockLocationIds?: string[] | null;
+    locationInventory?: Record<string, number> | null;
     tags?: string[] | null;
     specifications?: Record<string, unknown> | null;
     status: "draft" | "enriched" | "ready" | "published" | "archived";
@@ -196,6 +210,9 @@ export default function DraftDetailPage() {
     setTypeId(""); // Type ID is not stored in dedicated column, check specs if needed
     setCollectionId(product.collectionId || "");
     setCategoryIds(product.categoryIds || []);
+    setSalesChannelIds(product.salesChannelIds || []);
+    setStockLocationIds(product.stockLocationIds || []);
+    setLocationInventory(product.locationInventory || {});
     setTags(
       Array.isArray(product.tags)
         ? product.tags.join(", ")
@@ -212,6 +229,12 @@ export default function DraftDetailPage() {
     setStatus(product.status);
     setMedusaProductId(product.medusaProductId || null);
     previousStatusRef.current = product.status;
+    
+    // Store initial draft data for change detection
+    // Use setTimeout to ensure all state is set before capturing
+    setTimeout(() => {
+      initialDraftDataRef.current = getDraftData();
+    }, 0);
   };
 
   useEffect(() => {
@@ -222,7 +245,7 @@ export default function DraftDetailPage() {
           // Get draft data first
           const draftData = await getProductDraftAction(id);
           if (!draftData) {
-            setError("Draft not found");
+            setError("Product not found");
             setLoading(false);
             return;
           }
@@ -261,8 +284,8 @@ export default function DraftDetailPage() {
             loadDraftData(draftData.product);
           }
         } catch (err) {
-          console.error("Failed to load draft:", err);
-          setError("Failed to load draft");
+          console.error("Failed to load product:", err);
+          setError("Failed to load product");
         } finally {
           setLoading(false);
         }
@@ -419,6 +442,9 @@ export default function DraftDetailPage() {
       type,
       collectionId,
       categoryIds,
+      salesChannelIds,
+      stockLocationIds,
+      locationInventory,
       tags: tags
         ? tags
           .split(",")
@@ -459,11 +485,13 @@ export default function DraftDetailPage() {
     try {
       const draftData = getDraftData();
       await saveDraft(id || null, draftData);
-      setSuccess("Draft saved successfully");
+      setSuccess("Product saved successfully");
       setLastSaved(new Date());
+      // Update initial data ref after successful save
+      initialDraftDataRef.current = draftData;
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save draft");
+      setError(err instanceof Error ? err.message : "Failed to save product");
     } finally {
       setSaving(false);
     }
@@ -478,7 +506,7 @@ export default function DraftDetailPage() {
 
     try {
       await enrichDraft(id, "openai");
-      setSuccess("Draft enriched with AI content");
+      setSuccess("Product enriched with AI content");
 
       // Reload draft data
       const draftData = await getProductDraftAction(id);
@@ -497,7 +525,7 @@ export default function DraftDetailPage() {
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to enrich draft");
+      setError(err instanceof Error ? err.message : "Failed to enrich product");
     } finally {
       setEnriching(false);
     }
@@ -720,6 +748,68 @@ export default function DraftDetailPage() {
     }
   };
 
+  const handleUpdateToMedusa = async () => {
+    if (!id || !medusaProductId) return;
+
+    setUpdatingToMedusa(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // First, ensure draft is saved
+      const draftData = getDraftData();
+      await saveDraft(id, draftData);
+
+      // Then update to Medusa
+      const result = await updateDraftToMedusaAction(id);
+      if (result.success) {
+        setSuccess("Product updated in Medusa successfully!");
+        // Update initial data ref after successful update
+        initialDraftDataRef.current = draftData;
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        setError(result.error || "Failed to update product in Medusa");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update to Medusa");
+    } finally {
+      setUpdatingToMedusa(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!id || !medusaProductId) return;
+
+    // Confirm before unpublishing
+    if (
+      !confirm(
+        "Are you sure you want to unpublish this product? This will delete it from Medusa and reset the status to draft."
+      )
+    ) {
+      return;
+    }
+
+    setUnpublishing(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await unpublishDraftAction(id);
+      if (result.success) {
+        setMedusaProductId(null);
+        setStatus("draft");
+        setSuccess("Product unpublished from Medusa. Status reset to draft.");
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        setError(result.error || "Failed to unpublish product from Medusa");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unpublish");
+    } finally {
+      setUnpublishing(false);
+    }
+  };
+
   const handleSyncFromMedusa = async () => {
     if (!id) return;
 
@@ -745,6 +835,10 @@ export default function DraftDetailPage() {
         const updatedDraftData = await getProductDraftAction(id);
         if (updatedDraftData) {
           loadDraftData(updatedDraftData.product);
+          // Update initial data ref after sync
+          setTimeout(() => {
+            initialDraftDataRef.current = getDraftData();
+          }, 100);
         }
       } else {
         setError(syncResult.error || "Failed to sync from Medusa");
@@ -761,7 +855,7 @@ export default function DraftDetailPage() {
 
     if (
       !confirm(
-        "Are you sure you want to delete this draft? This action cannot be undone."
+        "Are you sure you want to delete this product? This action cannot be undone."
       )
     ) {
       return;
@@ -769,9 +863,9 @@ export default function DraftDetailPage() {
 
     try {
       await deleteDraft(id);
-      router.push("/drafts");
+      router.push("/products");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete draft");
+      setError(err instanceof Error ? err.message : "Failed to delete product");
     }
   };
 
@@ -793,18 +887,18 @@ export default function DraftDetailPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push("/drafts")}
+              onClick={() => router.push("/products")}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
               <h1 className="text-3xl font-bold">
-                {id ? "Edit Draft" : "New Draft"}
+                {id ? "Edit Product" : "New Product"}
               </h1>
               <p className="text-muted-foreground">
                 {id
-                  ? "Edit product draft details"
-                  : "Create a new product draft"}
+                  ? "Edit product details"
+                  : "Create a new product"}
               </p>
             </div>
           </div>
@@ -817,6 +911,16 @@ export default function DraftDetailPage() {
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
                     <span>Auto-saving...</span>
+                  </>
+                ) : updatingToMedusa ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Updating to Medusa...</span>
+                  </>
+                ) : unpublishing ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Unpublishing...</span>
                   </>
                 ) : syncingToMedusa ? (
                   <>
@@ -858,58 +962,113 @@ export default function DraftDetailPage() {
                   </>
                 )}
               </Button>
-              <Button onClick={handleSave} disabled={saving || publishing || autoSaving}>
-                {saving ? (
+              {(() => {
+                const currentData = getDraftData();
+                const hasChanges = hasDraftChanges(currentData, initialDraftDataRef.current);
+                return (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
+                    <Button
+                      onClick={handleSave}
+                      disabled={saving || publishing || autoSaving || !hasChanges}
+                      title={!hasChanges ? "No changes to save" : "Save product"}
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                    {medusaProductId && (
+                      <Button
+                        onClick={handleUpdateToMedusa}
+                        disabled={updatingToMedusa || unpublishing || !id || !hasChanges}
+                        variant="default"
+                        title={!hasChanges ? "No changes to push" : "Push local changes to Medusa"}
+                      >
+                        {updatingToMedusa ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Push to Medusa
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                  </>
-                )}
-              </Button>
-              {id && medusaProductId && (
-                <Button
-                  onClick={handleSyncFromMedusa}
-                  disabled={syncingFromMedusa || publishing || saving}
-                  variant="outline"
-                  title="Sync changes from Medusa"
-                >
-                  {syncingFromMedusa ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Syncing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Sync from Medusa
-                    </>
+                );
+              })()}
+              {medusaProductId && (
+                <>
+                  <Button
+                    onClick={handleUnpublish}
+                    disabled={unpublishing || updatingToMedusa || !id}
+                    variant="destructive"
+                    title="Unpublish product from Medusa"
+                  >
+                    {unpublishing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Unpublishing...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Unpublish
+                      </>
+                    )}
+                  </Button>
+                  {id && (
+                    <Button
+                      onClick={handleSyncFromMedusa}
+                      disabled={syncingFromMedusa || updatingToMedusa || unpublishing || saving}
+                      variant="outline"
+                      title="Sync changes from Medusa"
+                    >
+                      {syncingFromMedusa ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Sync from Medusa
+                        </>
+                      )}
+                    </Button>
                   )}
-                </Button>
+                </>
               )}
-              {id && status !== "published" && (
-                <Button
-                  onClick={handlePublish}
-                  disabled={publishing || saving || enriching || !sellingPrice}
-                  variant="default"
-                  className="bg-primary"
-                >
-                  {publishing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Publishing...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Publish to Medusa
-                    </>
-                  )}
-                </Button>
+              {!medusaProductId && (
+                <>
+                  <Button
+                    onClick={handlePublish}
+                    disabled={publishing || updatingToMedusa || unpublishing || !id}
+                    variant="default"
+                  >
+                    {publishing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Publishing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Publish
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
               {id && status === "published" && (
                 <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-400">
@@ -1370,6 +1529,36 @@ export default function DraftDetailPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <MedusaMultiSelect
+                    entityType="sales_channel"
+                    value={salesChannelIds}
+                    onValueChange={setSalesChannelIds}
+                    label="Sales Channels"
+                    placeholder="Select sales channels..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <MedusaMultiSelect
+                    entityType="stock_location"
+                    value={stockLocationIds}
+                    onValueChange={setStockLocationIds}
+                    label="Stock Locations"
+                    placeholder="Select stock locations..."
+                  />
+                </div>
+
+                {stockLocationIds.length > 0 && (
+                  <div className="space-y-2">
+                    <LocationInventoryManager
+                      stockLocationIds={stockLocationIds}
+                      locationInventory={locationInventory}
+                      onLocationInventoryChange={setLocationInventory}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
                   <Label htmlFor="tags">Tags</Label>
                   <div className="flex items-center gap-2">
                     <Input
@@ -1569,3 +1758,4 @@ export default function DraftDetailPage() {
     </DashboardLayout>
   );
 }
+

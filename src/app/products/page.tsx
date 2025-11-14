@@ -947,7 +947,7 @@ export default function ProductsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              <Link href={`/drafts/${product.id}`}>
+                              <Link href={`/products/${product.id}`}>
                                 <Button variant="ghost" size="sm">
                                   <ExternalLink className="h-4 w-4" />
                                 </Button>
@@ -980,7 +980,7 @@ export default function ProductsPage() {
                                     Quick Edit
                                   </DropdownMenuItem>
                                   <DropdownMenuItem asChild>
-                                    <Link href={`/drafts/${product.id}`}>
+                                    <Link href={`/products/${product.id}`}>
                                       <ExternalLink className="mr-2 h-4 w-4" />
                                       Full Edit
                                     </Link>

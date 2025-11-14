@@ -70,6 +70,9 @@ export const productsDraft = pgTable("products_draft", {
   collectionId: text("collection_id"), // Medusa collection identifier
   categoryIds: jsonb("category_ids").$type<string[]>(), // Array of category IDs
   tags: jsonb("tags").$type<string[]>(), // Array of tags
+  salesChannelIds: jsonb("sales_channel_ids").$type<string[]>(), // Array of sales channel IDs
+  stockLocationIds: jsonb("stock_location_ids").$type<string[]>(), // Array of stock location IDs
+  locationInventory: jsonb("location_inventory").$type<Record<string, number>>(), // Inventory quantities per location: { "locationId": quantity }
   // Specifications (JSON field for flexible specs and supplier-specific fields)
   // Stores: pid, vid, option_map_json, metadata_json, option_axes, variant_title, subtitle, thumbnail, etc.
   specifications: jsonb("specifications").$type<Record<string, unknown>>(),

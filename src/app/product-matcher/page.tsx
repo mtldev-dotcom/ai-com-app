@@ -194,7 +194,7 @@ export default function ProductMatcherPage() {
       });
       setSuccess("Draft created successfully! Redirecting...");
       setTimeout(() => {
-        router.push(`/drafts/${result.draftId}`);
+        router.push(`/products/${result.draftId}`);
       }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create draft");

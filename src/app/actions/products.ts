@@ -180,7 +180,6 @@ export async function syncMedusaProductToDraft(
       .returning();
 
     revalidatePath("/products");
-    revalidatePath("/drafts");
 
     return {
       success: true,

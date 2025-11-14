@@ -17,6 +17,8 @@ import {
 } from "@/db/queries/products-draft";
 import { deleteEntityInMedusa } from "@/lib/medusa/sync";
 import { medusaClient, type MedusaProduct } from "@/lib/medusa/client";
+import { updateDraftToMedusa } from "@/lib/medusa/update";
+import { unpublishDraft } from "@/lib/medusa/unpublish";
 
 /**
  * Get all product drafts (server action)
@@ -86,6 +88,9 @@ export async function saveDraft(
     type?: string;
     collectionId?: string;
     categoryIds?: string[];
+    salesChannelIds?: string[];
+    stockLocationIds?: string[];
+    locationInventory?: Record<string, number>;
     tags?: string[];
     specifications?: Record<string, unknown>;
     status?: "draft" | "enriched" | "ready" | "published" | "archived";
@@ -154,6 +159,9 @@ export async function saveDraft(
           type: data.type || undefined,
           collectionId: data.collectionId || undefined,
           categoryIds: data.categoryIds || undefined,
+          salesChannelIds: data.salesChannelIds || undefined,
+          stockLocationIds: data.stockLocationIds || undefined,
+          locationInventory: data.locationInventory || undefined,
           tags: data.tags || undefined,
           specifications: validated.specifications,
           status: validated.status,
@@ -161,8 +169,8 @@ export async function saveDraft(
         })
         .where(eq(productsDraft.id, id));
 
-      revalidatePath(`/drafts/${id}`);
-      revalidatePath("/drafts");
+      revalidatePath(`/products/${id}`);
+      revalidatePath("/products");
       return { success: true, id };
     } else {
       // Create new draft
@@ -200,13 +208,16 @@ export async function saveDraft(
           type: data.type || undefined,
           collectionId: data.collectionId || undefined,
           categoryIds: data.categoryIds || undefined,
+          salesChannelIds: data.salesChannelIds || undefined,
+          stockLocationIds: data.stockLocationIds || undefined,
+          locationInventory: data.locationInventory || undefined,
           tags: data.tags || undefined,
           specifications: validated.specifications,
           status: validated.status,
         })
         .returning();
 
-      revalidatePath("/drafts");
+      revalidatePath("/products");
       return { success: true, id: newDraft.id };
     }
   } catch (error) {
@@ -319,8 +330,8 @@ export async function enrichDraft(
       })
       .where(eq(productsDraft.id, id));
 
-    revalidatePath(`/drafts/${id}`);
-    revalidatePath("/drafts");
+    revalidatePath(`/products/${id}`);
+    revalidatePath("/products");
 
     return { success: true, enriched };
   } catch (error) {
@@ -386,7 +397,7 @@ export async function syncDraftFromMedusa(draftId: string): Promise<{
           .where(eq(productsDraft.id, draftId));
 
         revalidatePath(`/drafts/${draftId}`);
-        revalidatePath("/drafts");
+        revalidatePath("/products");
         return { success: true, deleted: true };
       }
       throw error;
@@ -410,6 +421,13 @@ export async function syncDraftFromMedusa(draftId: string): Promise<{
     // Extract categories and collection from product structure
     const categoryIds = medusaProduct.categories?.map((cat) => cat.id) || undefined;
     const collectionId = medusaProduct.collection_id || undefined;
+    
+    // Extract sales channels from product (if available in response)
+    // Note: Sales channels might not be in product response, may need separate API call
+    const salesChannelIds = medusaProduct.sales_channels?.map((sc) => sc.id) || undefined;
+    
+    // Stock locations are typically associated with inventory items/variants, not products directly
+    // We'll keep the local stockLocationIds but won't sync them from product response
 
     // Update local draft with Medusa data
     await db
@@ -431,6 +449,8 @@ export async function syncDraftFromMedusa(draftId: string): Promise<{
         categoryIds: categoryIds !== undefined ? categoryIds : draftData.product.categoryIds,
         // Update collection if available (only update if we got collection from Medusa)
         collectionId: collectionId !== undefined ? collectionId : draftData.product.collectionId,
+        // Update sales channels if available (only update if we got sales channels from Medusa)
+        salesChannelIds: salesChannelIds !== undefined ? salesChannelIds : draftData.product.salesChannelIds,
         // Update specifications with Medusa metadata
         specifications: {
           ...(draftData.product.specifications as Record<string, unknown> || {}),
@@ -442,8 +462,8 @@ export async function syncDraftFromMedusa(draftId: string): Promise<{
       })
       .where(eq(productsDraft.id, draftId));
 
-    revalidatePath(`/drafts/${draftId}`);
-    revalidatePath("/drafts");
+        revalidatePath(`/products/${draftId}`);
+        revalidatePath("/products");
 
     return { success: true, synced: true };
   } catch (error) {
@@ -451,6 +471,48 @@ export async function syncDraftFromMedusa(draftId: string): Promise<{
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to sync from Medusa",
+    };
+  }
+}
+
+/**
+ * Update draft to Medusa (push changes to existing published product)
+ */
+export async function updateDraftToMedusaAction(
+  draftId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await updateDraftToMedusa(draftId);
+    return result;
+  } catch (error) {
+    console.error("Error updating draft to Medusa:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update product in Medusa",
+    };
+  }
+}
+
+/**
+ * Unpublish draft from Medusa (delete from Medusa and reset local status)
+ */
+export async function unpublishDraftAction(
+  draftId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await unpublishDraft(draftId);
+    return result;
+  } catch (error) {
+    console.error("Error unpublishing draft:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to unpublish product from Medusa",
     };
   }
 }

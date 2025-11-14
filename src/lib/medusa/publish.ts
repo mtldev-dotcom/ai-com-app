@@ -9,6 +9,7 @@ import { productsDraft, variantsDraft } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { VariantDraft } from "@/db/schema/variants-draft";
 import { copyImagesToPublished } from "@/lib/s3/upload";
+import { getMedusaBaseUrl, getAuthHeader } from "./sync";
 
 export interface PublishResult {
   success: boolean;
@@ -177,6 +178,27 @@ export async function publishDraft(
     // Collection: Use dedicated column first, then fallback to specifications
     const collectionId = product.collectionId || (specs.collection_id as string) || undefined;
     
+    // Sales Channels: Use dedicated column first, then fallback to specifications
+    const salesChannelIds = product.salesChannelIds && product.salesChannelIds.length > 0
+      ? product.salesChannelIds
+      : Array.isArray(specs.sales_channel_ids)
+        ? (specs.sales_channel_ids as string[])
+        : specs.sales_channel_id
+          ? [specs.sales_channel_id as string]
+          : [];
+    
+    // Stock Locations: Use dedicated column first, then fallback to specifications
+    const stockLocationIds = product.stockLocationIds && product.stockLocationIds.length > 0
+      ? product.stockLocationIds
+      : Array.isArray(specs.stock_location_ids)
+        ? (specs.stock_location_ids as string[])
+        : specs.stock_location_id
+          ? [specs.stock_location_id as string]
+          : [];
+    
+    // Location Inventory: Inventory quantities per location
+    const locationInventory = product.locationInventory || (specs.location_inventory as Record<string, number>) || {};
+    
     // Tags: Use dedicated column first, then fallback to specifications
     const tagsArray = product.tags && product.tags.length > 0
       ? product.tags
@@ -320,12 +342,16 @@ export async function publishDraft(
       ? categoryIds.map((id) => ({ id }))
       : undefined;
     
-    // Log categories and collection for debugging
+    // Log categories, collection, sales channels, stock locations, and inventory for debugging
     console.log("Publishing product with:", {
       collectionId,
       categoryIds,
       medusaCategories,
+      salesChannelIds: salesChannelIds.length > 0 ? salesChannelIds : "none",
+      stockLocationIds: stockLocationIds.length > 0 ? stockLocationIds : "none",
+      locationInventory: Object.keys(locationInventory).length > 0 ? locationInventory : "none",
       currencyCode,
+      variantCount: medusaVariantIds.length,
     });
 
     // Create product in Medusa with options and variants
@@ -371,6 +397,248 @@ export async function publishDraft(
         console.warn("Could not fetch product variants:", error);
         // Variants should be created with the product, so this shouldn't happen
         // But we'll continue anyway
+      }
+    }
+
+    // Associate sales channels with product (if any)
+    // Medusa requires a separate API call to associate sales channels
+    if (salesChannelIds.length > 0) {
+      try {
+        const baseUrl = await getMedusaBaseUrl();
+        const authHeader = await getAuthHeader();
+        
+        console.log(`Associating ${salesChannelIds.length} sales channel(s) with product ${medusaProduct.id}`);
+        
+        for (const salesChannelId of salesChannelIds) {
+          const res = await fetch(
+            `${baseUrl}/admin/products/${medusaProduct.id}/sales-channels`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: authHeader,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                add: [salesChannelId],
+              }),
+            }
+          );
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error(
+              `Failed to associate sales channel ${salesChannelId} with product:`,
+              res.status,
+              res.statusText,
+              errorText
+            );
+            // Continue with other sales channels even if one fails
+          } else {
+            console.log(`Successfully associated sales channel ${salesChannelId}`);
+          }
+        }
+        console.log(
+          `Completed sales channel association for product ${medusaProduct.id}`
+        );
+      } catch (error) {
+        console.error("Failed to associate sales channels with product:", error);
+        // Don't fail the entire publish operation if sales channel association fails
+      }
+    } else {
+      console.log("No sales channels to associate");
+    }
+
+    // Create inventory items and set location levels for each variant
+    // Medusa requires: 1) Create inventory item for variant, 2) Set location levels
+    // Note: We need at least stock locations OR inventory quantities to proceed
+    if ((stockLocationIds.length > 0 || Object.keys(locationInventory).length > 0) && medusaVariantIds.length > 0) {
+      try {
+        const baseUrl = await getMedusaBaseUrl();
+        const authHeader = await getAuthHeader();
+        
+        console.log(`Setting up inventory for ${medusaVariantIds.length} variant(s) with ${stockLocationIds.length} location(s)`);
+        
+        // For each variant, create inventory item and set location levels
+        for (const variantId of medusaVariantIds) {
+          // Step 1: Create inventory item for the variant (if not exists)
+          // First, try to get existing inventory item for this variant
+          let inventoryItemId: string | null = null;
+          
+          try {
+            // Check if variant already has an inventory item
+            const variantRes = await fetch(
+              `${baseUrl}/admin/products/${medusaProduct.id}/variants/${variantId}`,
+              {
+                headers: {
+                  Authorization: authHeader,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            
+            if (variantRes.ok) {
+              const variantData = await variantRes.json();
+              const variant = variantData.variant;
+              
+              // Get inventory item ID from variant (if it exists)
+              if (variant.inventory_items && variant.inventory_items.length > 0) {
+                inventoryItemId = variant.inventory_items[0].id;
+              } else if (variant.inventory_item_id) {
+                inventoryItemId = variant.inventory_item_id;
+              }
+            }
+          } catch (error) {
+            console.warn(`Could not fetch variant ${variantId}:`, error);
+          }
+          
+          // If no inventory item exists, create one
+          if (!inventoryItemId) {
+            try {
+              // Get variant SKU for inventory item
+              const variantSku = variants.find(v => {
+                // Match variant by checking if it's the first/default variant
+                return true; // For now, use the product SKU or generate one
+              })?.sku || sku || `${productHandle || "product"}-variant`;
+              
+              const createInventoryRes = await fetch(
+                `${baseUrl}/admin/inventory-items`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: authHeader,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    sku: variantSku,
+                    ...(weight ? { weight: Math.round(weight * 1000) } : {}), // Convert kg to grams
+                    ...(length ? { length: Math.round(length * 10) } : {}), // Convert cm to mm
+                    ...(height ? { height: Math.round(height * 10) } : {}), // Convert cm to mm
+                    ...(width ? { width: Math.round(width * 10) } : {}), // Convert cm to mm
+                    ...(originCountry ? { origin_country: originCountry } : {}),
+                    ...(hsCode ? { hs_code: hsCode } : {}),
+                  }),
+                }
+              );
+              
+              if (createInventoryRes.ok) {
+                const inventoryData = await createInventoryRes.json();
+                inventoryItemId = inventoryData.inventory_item.id;
+                console.log(`Created inventory item ${inventoryItemId} for variant ${variantId}`);
+                
+                // Associate inventory item with variant
+                const associateRes = await fetch(
+                  `${baseUrl}/admin/products/${medusaProduct.id}/variants/${variantId}/inventory-items/${inventoryItemId}`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: authHeader,
+                      "Content-Type": "application/json",
+                    },
+                  }
+                );
+                
+                if (!associateRes.ok) {
+                  const errorText = await associateRes.text();
+                  console.error(
+                    `Failed to associate inventory item ${inventoryItemId} with variant ${variantId}:`,
+                    associateRes.status,
+                    associateRes.statusText,
+                    errorText
+                  );
+                } else {
+                  console.log(`Successfully associated inventory item ${inventoryItemId} with variant ${variantId}`);
+                }
+              } else {
+                const errorText = await createInventoryRes.text();
+                console.error(
+                  `Failed to create inventory item for variant ${variantId}:`,
+                  createInventoryRes.status,
+                  createInventoryRes.statusText,
+                  errorText
+                );
+                continue; // Skip this variant if inventory item creation fails
+              }
+            } catch (error) {
+              console.error(`Failed to create inventory item for variant ${variantId}:`, error);
+              continue; // Skip this variant if inventory item creation fails
+            }
+          }
+          
+          // Step 2: Set location levels for this inventory item
+          if (inventoryItemId) {
+            // Build location levels: use inventory quantities if available, otherwise set to 0
+            const locationLevels = stockLocationIds.length > 0
+              ? stockLocationIds.map((locId) => ({
+                  location_id: locId,
+                  stocked_quantity: locationInventory[locId] !== undefined && locationInventory[locId] > 0
+                    ? locationInventory[locId]
+                    : 0, // Default to 0 if no quantity specified
+                }))
+              : // If no stock locations but we have inventory data, use those locations
+                Object.keys(locationInventory).map((locId) => ({
+                  location_id: locId,
+                  stocked_quantity: locationInventory[locId] || 0,
+                }));
+            
+            if (locationLevels.length > 0) {
+              try {
+                console.log(`Setting ${locationLevels.length} location level(s) for inventory item ${inventoryItemId} (variant ${variantId})`);
+                
+                const locationLevelsRes = await fetch(
+                  `${baseUrl}/admin/inventory-items/${inventoryItemId}/location-levels/batch`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: authHeader,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      create: locationLevels,
+                    }),
+                  }
+                );
+                
+                if (!locationLevelsRes.ok) {
+                  const errorText = await locationLevelsRes.text();
+                  console.error(
+                    `Failed to set location levels for inventory item ${inventoryItemId}:`,
+                    locationLevelsRes.status,
+                    locationLevelsRes.statusText,
+                    errorText
+                  );
+                } else {
+                  const result = await locationLevelsRes.json();
+                  console.log(
+                    `Successfully set ${locationLevels.length} location level(s) for variant ${variantId}`,
+                    result
+                  );
+                }
+              } catch (error) {
+                console.error(
+                  `Failed to set location levels for inventory item ${inventoryItemId}:`,
+                  error
+                );
+              }
+            } else {
+              console.warn(`No location levels to set for variant ${variantId} (no stock locations or inventory data)`);
+            }
+          } else {
+            console.warn(`No inventory item ID for variant ${variantId}, skipping location levels`);
+          }
+        }
+        
+        console.log(
+          `Completed inventory setup for ${medusaVariantIds.length} variant(s) with ${stockLocationIds.length > 0 ? stockLocationIds.length : Object.keys(locationInventory).length} location(s)`
+        );
+      } catch (error) {
+        console.error("Failed to set inventory location levels:", error);
+        // Don't fail the entire publish operation if inventory setup fails
+      }
+    } else {
+      if (medusaVariantIds.length === 0) {
+        console.warn("No variants found, skipping inventory setup");
+      } else if (stockLocationIds.length === 0 && Object.keys(locationInventory).length === 0) {
+        console.warn("No stock locations or inventory data provided, skipping inventory setup");
       }
     }
 

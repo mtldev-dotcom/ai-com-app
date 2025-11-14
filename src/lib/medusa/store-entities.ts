@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
  * Store synced entities in settings (as JSONB)
  */
 export async function storeSyncedEntities(
-  entityType: "category" | "collection" | "type" | "tag" | "sales_channel",
+  entityType: "category" | "collection" | "type" | "tag" | "sales_channel" | "stock_location",
   entities: unknown[]
 ): Promise<void> {
   const key = `medusa_${entityType}s`;
@@ -43,7 +43,7 @@ export async function storeSyncedEntities(
  * Get stored synced entities
  */
 export async function getSyncedEntities(
-  entityType: "category" | "collection" | "type" | "tag" | "sales_channel"
+  entityType: "category" | "collection" | "type" | "tag" | "sales_channel" | "stock_location"
 ): Promise<unknown[]> {
   const key = `medusa_${entityType}s`;
 

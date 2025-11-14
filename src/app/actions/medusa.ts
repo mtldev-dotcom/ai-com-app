@@ -30,8 +30,8 @@ export async function publishDraftAction(productDraftId: string): Promise<{
     const result = await publishDraft(productDraftId);
 
     if (result.success) {
-      revalidatePath(`/drafts/${productDraftId}`);
-      revalidatePath("/drafts");
+      revalidatePath(`/products/${productDraftId}`);
+      revalidatePath("/products");
     }
 
     return result;

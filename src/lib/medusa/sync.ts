@@ -17,7 +17,8 @@ export type MedusaEntityType =
   | "collection"
   | "type"
   | "tag"
-  | "sales_channel";
+  | "sales_channel"
+  | "stock_location";
 
 /**
  * Sync operation types
@@ -27,7 +28,7 @@ export type SyncOperation = "fetch" | "create" | "update" | "delete";
 /**
  * Helper to get Medusa base URL
  */
-async function getMedusaBaseUrl(): Promise<string> {
+export async function getMedusaBaseUrl(): Promise<string> {
   const url = await getSetting<string>(SETTING_KEYS.MEDUSA_ADMIN_URL);
   if (url) {
     return url.replace(/\/$/, "");
@@ -63,7 +64,7 @@ async function getMedusaToken(): Promise<string> {
 /**
  * Helper to get auth header
  */
-async function getAuthHeader(): Promise<string> {
+export async function getAuthHeader(): Promise<string> {
   const token = await getMedusaToken();
   const isJWT = token.includes(".") && token.split(".").length === 3;
   return isJWT
@@ -247,6 +248,33 @@ export async function fetchSalesChannels() {
 }
 
 /**
+ * Fetch stock locations from Medusa
+ */
+export async function fetchStockLocations() {
+  try {
+    const baseUrl = await getMedusaBaseUrl();
+    const authHeader = await getAuthHeader();
+
+    const res = await fetch(`${baseUrl}/admin/stock-locations`, {
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch stock locations: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.stock_locations || [];
+  } catch (error) {
+    console.error("Error fetching stock locations from Medusa:", error);
+    throw error;
+  }
+}
+
+/**
  * Fetch entities based on type
  */
 export async function fetchEntities(
@@ -266,6 +294,8 @@ export async function fetchEntities(
       return await fetchTags();
     case "sales_channel":
       return await fetchSalesChannels();
+    case "stock_location":
+      return await fetchStockLocations();
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }
@@ -289,6 +319,7 @@ export async function createEntityInMedusa(
     type: "/admin/product-types",
     tag: "/admin/product-tags",
     sales_channel: "/admin/sales-channels",
+    stock_location: "/admin/stock-locations",
   };
 
   const endpoint = endpoints[entityType];
@@ -334,6 +365,7 @@ export async function updateEntityInMedusa(
     type: `/admin/product-types/${entityId}`,
     tag: `/admin/product-tags/${entityId}`,
     sales_channel: `/admin/sales-channels/${entityId}`,
+    stock_location: `/admin/stock-locations/${entityId}`,
   };
 
   const endpoint = endpoints[entityType];
@@ -378,6 +410,7 @@ export async function deleteEntityInMedusa(
     type: `/admin/product-types/${entityId}`,
     tag: `/admin/product-tags/${entityId}`,
     sales_channel: `/admin/sales-channels/${entityId}`,
+    stock_location: `/admin/stock-locations/${entityId}`,
   };
 
   const endpoint = endpoints[entityType];

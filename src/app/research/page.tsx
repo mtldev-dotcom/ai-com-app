@@ -162,7 +162,7 @@ export default function ResearchPage() {
       if (result.success && result.id) {
         setSuccess("Draft created successfully");
         setTimeout(() => {
-          router.push(`/drafts/${result.id}`);
+          router.push(`/products/${result.id}`);
         }, 1500);
       }
     } catch (err) {

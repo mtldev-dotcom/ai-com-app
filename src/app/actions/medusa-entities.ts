@@ -12,6 +12,7 @@ import {
   fetchTypes,
   fetchTags,
   fetchSalesChannels,
+  fetchStockLocations,
   createEntityInMedusa,
   deleteEntityInMedusa,
 } from "@/lib/medusa/sync";
@@ -25,7 +26,7 @@ import type { MedusaEntityType } from "@/lib/medusa/sync";
  * Sync and store entities
  */
 export async function syncAndStoreEntities(
-  entityType: "category" | "collection" | "type" | "tag" | "sales_channel"
+  entityType: "category" | "collection" | "type" | "tag" | "sales_channel" | "stock_location"
 ) {
   const supabase = await createClient();
   const {
@@ -54,6 +55,9 @@ export async function syncAndStoreEntities(
     case "sales_channel":
       entities = await fetchSalesChannels();
       break;
+    case "stock_location":
+      entities = await fetchStockLocations();
+      break;
   }
 
   // Store in database
@@ -70,7 +74,7 @@ export async function syncAndStoreEntities(
  * Get stored entities
  */
 export async function getStoredEntities(
-  entityType: "category" | "collection" | "type" | "tag" | "sales_channel"
+  entityType: "category" | "collection" | "type" | "tag" | "sales_channel" | "stock_location"
 ) {
   const supabase = await createClient();
   const {

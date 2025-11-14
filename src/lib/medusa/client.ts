@@ -19,6 +19,7 @@ export interface MedusaProduct {
   variants?: MedusaVariant[];
   collection_id?: string;
   categories?: Array<{ id: string; name?: string }>;
+  sales_channels?: Array<{ id: string; name?: string }>;
   created_at: string;
   updated_at: string;
 }

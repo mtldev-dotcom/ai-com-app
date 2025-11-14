@@ -744,7 +744,7 @@ export async function saveDraftsFromImport(params: SaveDraftsParams) {
       .where(eq(imports.id, importId));
 
     revalidatePath("/imports");
-    revalidatePath("/drafts");
+    revalidatePath("/products");
 
     console.log("Import completed successfully", { processedRows, failedRows });
 
@@ -911,7 +911,7 @@ export async function importCJProducts(
       .where(eq(imports.id, importRecord.id));
 
     revalidatePath("/imports");
-    revalidatePath("/drafts");
+    revalidatePath("/products");
 
     console.log("CJ import completed successfully");
 
