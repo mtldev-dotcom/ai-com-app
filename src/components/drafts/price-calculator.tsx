@@ -48,9 +48,9 @@ export function PriceCalculator({
   }, [cost, initialMargin]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Price Calculator</CardTitle>
+    <Card className="border-2 border-primary/50 shadow-lg">
+      <CardHeader className="border-b-2 border-primary/50 bg-primary/5">
+        <CardTitle className="text-primary">Price Calculator</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

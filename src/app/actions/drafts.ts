@@ -16,6 +16,7 @@ import {
   getProductDraftById,
 } from "@/db/queries/products-draft";
 import { deleteEntityInMedusa } from "@/lib/medusa/sync";
+import { medusaClient, type MedusaProduct } from "@/lib/medusa/client";
 
 /**
  * Get all product drafts (server action)
@@ -325,5 +326,131 @@ export async function enrichDraft(
   } catch (error) {
     console.error("Enrich draft error:", error);
     throw error;
+  }
+}
+
+/**
+ * Sync product from Medusa to local database
+ * Fetches latest data from Medusa and updates local draft
+ * Handles product deletion (if product was deleted in Medusa)
+ */
+export async function syncDraftFromMedusa(draftId: string): Promise<{
+  success: boolean;
+  synced?: boolean;
+  deleted?: boolean;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    // Get draft to check if it has a Medusa product ID
+    const draftData = await getProductDraftById(draftId);
+    if (!draftData) {
+      return { success: false, error: "Draft not found" };
+    }
+
+    const medusaProductId = draftData.product.medusaProductId;
+    if (!medusaProductId) {
+      return { success: false, error: "Product is not published to Medusa" };
+    }
+
+    // Fetch product from Medusa
+    let medusaProduct: MedusaProduct;
+    try {
+      medusaProduct = await medusaClient.getProduct(medusaProductId);
+    } catch (error) {
+      // Handle product deletion (404 error or "not found" message)
+      const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
+      const isNotFound = 
+        errorMessage.includes("404") ||
+        errorMessage.includes("not found") ||
+        errorMessage.includes("product not found");
+      
+      if (isNotFound) {
+        // Product was deleted in Medusa, mark status back to draft
+        await db
+          .update(productsDraft)
+          .set({
+            status: "draft",
+            medusaProductId: null,
+            medusaVariantIds: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(productsDraft.id, draftId));
+
+        revalidatePath(`/drafts/${draftId}`);
+        revalidatePath("/drafts");
+        return { success: true, deleted: true };
+      }
+      throw error;
+    }
+
+    // Extract data from Medusa product
+    const imageUrls = medusaProduct.images?.map((img) => img.url) || [];
+    
+    // Get selling price from first variant (or use existing)
+    let sellingPrice: string | undefined;
+    if (medusaProduct.variants && medusaProduct.variants.length > 0) {
+      const firstVariant = medusaProduct.variants[0];
+      if (firstVariant.price) {
+        sellingPrice = firstVariant.price.toString();
+      }
+    }
+
+    // Extract variant IDs
+    const variantIds = medusaProduct.variants?.map((v) => v.id) || [];
+
+    // Extract categories and collection from product structure
+    const categoryIds = medusaProduct.categories?.map((cat) => cat.id) || undefined;
+    const collectionId = medusaProduct.collection_id || undefined;
+
+    // Update local draft with Medusa data
+    await db
+      .update(productsDraft)
+      .set({
+        // Update title if changed (preserve EN/FR split if exists)
+        titleEn: medusaProduct.title || draftData.product.titleEn,
+        // Update description
+        descriptionEn: medusaProduct.description || draftData.product.descriptionEn,
+        // Update images
+        images: imageUrls.length > 0 ? imageUrls : draftData.product.images,
+        // Update selling price if available
+        sellingPrice: sellingPrice || draftData.product.sellingPrice,
+        // Update handle
+        handle: medusaProduct.handle || draftData.product.handle,
+        // Update variant IDs
+        medusaVariantIds: variantIds.length > 0 ? variantIds : draftData.product.medusaVariantIds,
+        // Update categories if available (only update if we got categories from Medusa)
+        categoryIds: categoryIds !== undefined ? categoryIds : draftData.product.categoryIds,
+        // Update collection if available (only update if we got collection from Medusa)
+        collectionId: collectionId !== undefined ? collectionId : draftData.product.collectionId,
+        // Update specifications with Medusa metadata
+        specifications: {
+          ...(draftData.product.specifications as Record<string, unknown> || {}),
+          medusa_handle: medusaProduct.handle,
+          medusa_updated_at: medusaProduct.updated_at,
+          ...(medusaProduct.metadata || {}),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(productsDraft.id, draftId));
+
+    revalidatePath(`/drafts/${draftId}`);
+    revalidatePath("/drafts");
+
+    return { success: true, synced: true };
+  } catch (error) {
+    console.error("Sync draft from Medusa error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to sync from Medusa",
+    };
   }
 }

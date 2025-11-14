@@ -21,6 +21,7 @@ import {
   deleteDraft,
   enrichDraft,
   getProductDraftAction,
+  syncDraftFromMedusa,
 } from "@/app/actions/drafts";
 import { publishDraftAction } from "@/app/actions/medusa";
 import {
@@ -34,6 +35,7 @@ import {
   Upload,
   Languages,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { AIFillButton } from "@/components/drafts/ai-fill-button";
 import { MedusaEntitySelector } from "@/components/drafts/medusa-entity-selector";
@@ -61,6 +63,7 @@ export default function DraftDetailPage() {
   const [enriching, setEnriching] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [syncingToMedusa, setSyncingToMedusa] = useState(false);
+  const [syncingFromMedusa, setSyncingFromMedusa] = useState(false);
   const [medusaProductId, setMedusaProductId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -115,78 +118,157 @@ export default function DraftDetailPage() {
     "draft" | "enriched" | "ready" | "published" | "archived"
   >("draft");
 
+  // Helper function to load draft data into state
+  const loadDraftData = (product: {
+    supplierId: string;
+    titleEn?: string | null;
+    titleFr?: string | null;
+    subtitle?: string | null;
+    descriptionEn?: string | null;
+    descriptionFr?: string | null;
+    metaTitle?: string | null;
+    metaDescription?: string | null;
+    images?: string[] | null;
+    cost?: string | null;
+    margin?: string | null;
+    sellingPrice?: string | null;
+    handle?: string | null;
+    currency?: string | null;
+    sku?: string | null;
+    supplierProductId?: string | null;
+    supplierVariantId?: string | null;
+    marketplaceUrl?: string | null;
+    weight?: string | null;
+    length?: string | null;
+    height?: string | null;
+    width?: string | null;
+    originCountry?: string | null;
+    hsCode?: string | null;
+    midCode?: string | null;
+    material?: string | null;
+    type?: string | null;
+    collectionId?: string | null;
+    categoryIds?: string[] | null;
+    tags?: string[] | null;
+    specifications?: Record<string, unknown> | null;
+    status: "draft" | "enriched" | "ready" | "published" | "archived";
+    medusaProductId?: string | null;
+  }) => {
+    setSupplierId(product.supplierId);
+    setTitleEn(product.titleEn || "");
+    setTitleFr(product.titleFr || "");
+    setSubtitle(product.subtitle || "");
+    setDescriptionEn(product.descriptionEn || "");
+    setDescriptionFr(product.descriptionFr || "");
+    setMetaTitle(product.metaTitle || "");
+    setMetaDescription(product.metaDescription || "");
+    setImages(product.images || []);
+    setCost(product.cost || "0");
+    const marginValue = product.margin ? parseFloat(product.margin) : 30;
+    setMargin(marginValue);
+    // Calculate default selling price if not set
+    const existingSellingPrice = product.sellingPrice || "";
+    if (!existingSellingPrice && product.cost) {
+      const costNum = parseFloat(product.cost) || 0;
+      const calculatedPrice = costNum * (1 + marginValue / 100);
+      // Round to 2 decimal places to avoid floating point precision issues
+      const roundedPrice = Math.round(calculatedPrice * 100) / 100;
+      setSellingPrice(roundedPrice.toFixed(2));
+    } else {
+      setSellingPrice(existingSellingPrice);
+    }
+    // Read from dedicated columns (not specifications)
+    setHandle(product.handle || "");
+    setCurrency(product.currency || "USD"); // Default to USD
+    setSku(product.sku || "");
+    setSupplierProductId(product.supplierProductId || "");
+    setSupplierVariantId(product.supplierVariantId || "");
+    setMarketplaceUrl(product.marketplaceUrl || "");
+    setWeight(product.weight || "");
+    setLength(product.length || "");
+    setHeight(product.height || "");
+    setWidth(product.width || "");
+    setOriginCountry(product.originCountry || "");
+    setHsCode(product.hsCode || "");
+    setMidCode(product.midCode || "");
+    setMaterial(product.material || "");
+    setType(product.type || "");
+    setTypeId(""); // Type ID is not stored in dedicated column, check specs if needed
+    setCollectionId(product.collectionId || "");
+    setCategoryIds(product.categoryIds || []);
+    setTags(
+      Array.isArray(product.tags)
+        ? product.tags.join(", ")
+        : product.tags || ""
+    );
+    // Keep specifications for backward compatibility and additional fields
+    const specs =
+      (product.specifications as Record<string, unknown>) || {};
+    setSpecifications(specs);
+    // Extract type_id from specifications if needed
+    if (!type && specs.type_id) {
+      setTypeId(specs.type_id as string);
+    }
+    setStatus(product.status);
+    setMedusaProductId(product.medusaProductId || null);
+    previousStatusRef.current = product.status;
+  };
+
   useEffect(() => {
     if (id) {
-      getProductDraftAction(id)
-        .then((draftData) => {
-          if (draftData) {
-            const product = draftData.product;
-            setSupplierId(product.supplierId);
-            setTitleEn(product.titleEn || "");
-            setTitleFr(product.titleFr || "");
-            setSubtitle(product.subtitle || "");
-            setDescriptionEn(product.descriptionEn || "");
-            setDescriptionFr(product.descriptionFr || "");
-            setMetaTitle(product.metaTitle || "");
-            setMetaDescription(product.metaDescription || "");
-            setImages(product.images || []);
-            setCost(product.cost || "0");
-            const marginValue = product.margin ? parseFloat(product.margin) : 30;
-            setMargin(marginValue);
-            // Calculate default selling price if not set
-            const existingSellingPrice = product.sellingPrice || "";
-            if (!existingSellingPrice && product.cost) {
-              const costNum = parseFloat(product.cost) || 0;
-              const calculatedPrice = costNum * (1 + marginValue / 100);
-              // Round to 2 decimal places to avoid floating point precision issues
-              const roundedPrice = Math.round(calculatedPrice * 100) / 100;
-              setSellingPrice(roundedPrice.toFixed(2));
-            } else {
-              setSellingPrice(existingSellingPrice);
-            }
-            // Read from dedicated columns (not specifications)
-            setHandle(product.handle || "");
-            setCurrency(product.currency || "USD"); // Default to USD
-            setSku(product.sku || "");
-            setSupplierProductId(product.supplierProductId || "");
-            setSupplierVariantId(product.supplierVariantId || "");
-            setMarketplaceUrl(product.marketplaceUrl || "");
-            setWeight(product.weight || "");
-            setLength(product.length || "");
-            setHeight(product.height || "");
-            setWidth(product.width || "");
-            setOriginCountry(product.originCountry || "");
-            setHsCode(product.hsCode || "");
-            setMidCode(product.midCode || "");
-            setMaterial(product.material || "");
-            setType(product.type || "");
-            setTypeId(""); // Type ID is not stored in dedicated column, check specs if needed
-            setCollectionId(product.collectionId || "");
-            setCategoryIds(product.categoryIds || []);
-            setTags(
-              Array.isArray(product.tags)
-                ? product.tags.join(", ")
-                : product.tags || ""
-            );
-            // Keep specifications for backward compatibility and additional fields
-            const specs =
-              (product.specifications as Record<string, unknown>) || {};
-            setSpecifications(specs);
-            // Extract type_id from specifications if needed
-            if (!type && specs.type_id) {
-              setTypeId(specs.type_id as string);
-            }
-            setStatus(product.status);
-            setMedusaProductId(product.medusaProductId || null);
-            previousStatusRef.current = product.status;
+      // First, sync from Medusa if product is published
+      const loadDraft = async () => {
+        try {
+          // Get draft data first
+          const draftData = await getProductDraftAction(id);
+          if (!draftData) {
+            setError("Draft not found");
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-        })
-        .catch((err) => {
+
+          // If product is published to Medusa, sync changes from Medusa
+          if (draftData.product.medusaProductId) {
+            const syncResult = await syncDraftFromMedusa(id);
+            if (syncResult.success) {
+              if (syncResult.deleted) {
+                setSuccess("Product was deleted in Medusa. Status updated to draft.");
+                setTimeout(() => setSuccess(null), 5000);
+                // Reload draft data after sync
+                const updatedDraftData = await getProductDraftAction(id);
+                if (updatedDraftData) {
+                  loadDraftData(updatedDraftData.product);
+                }
+              } else if (syncResult.synced) {
+                setSuccess("Product synced from Medusa. Changes have been updated.");
+                setTimeout(() => setSuccess(null), 5000);
+                // Reload draft data after sync
+                const updatedDraftData = await getProductDraftAction(id);
+                if (updatedDraftData) {
+                  loadDraftData(updatedDraftData.product);
+                }
+              } else {
+                // No sync needed or sync failed silently, just load draft
+                loadDraftData(draftData.product);
+              }
+            } else {
+              // Sync failed, but still load draft data
+              console.warn("Failed to sync from Medusa:", syncResult.error);
+              loadDraftData(draftData.product);
+            }
+          } else {
+            // Not published, just load draft data
+            loadDraftData(draftData.product);
+          }
+        } catch (err) {
           console.error("Failed to load draft:", err);
           setError("Failed to load draft");
+        } finally {
           setLoading(false);
-        });
+        }
+      };
+
+      loadDraft();
     } else {
       setLoading(false);
     }
@@ -638,6 +720,42 @@ export default function DraftDetailPage() {
     }
   };
 
+  const handleSyncFromMedusa = async () => {
+    if (!id) return;
+
+    setSyncingFromMedusa(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const syncResult = await syncDraftFromMedusa(id);
+      if (syncResult.success) {
+        if (syncResult.deleted) {
+          setSuccess("Product was deleted in Medusa. Status updated to draft.");
+          setTimeout(() => setSuccess(null), 5000);
+        } else if (syncResult.synced) {
+          setSuccess("Product synced from Medusa. Changes have been updated.");
+          setTimeout(() => setSuccess(null), 5000);
+        } else {
+          setSuccess("Product is up to date with Medusa.");
+          setTimeout(() => setSuccess(null), 3000);
+        }
+
+        // Reload draft data after sync
+        const updatedDraftData = await getProductDraftAction(id);
+        if (updatedDraftData) {
+          loadDraftData(updatedDraftData.product);
+        }
+      } else {
+        setError(syncResult.error || "Failed to sync from Medusa");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sync from Medusa");
+    } finally {
+      setSyncingFromMedusa(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
 
@@ -705,6 +823,11 @@ export default function DraftDetailPage() {
                     <Loader2 className="h-3 w-3 animate-spin" />
                     <span>Syncing to Medusa...</span>
                   </>
+                ) : syncingFromMedusa ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Syncing from Medusa...</span>
+                  </>
                 ) : lastSaved ? (
                   <>
                     <CheckCircle2 className="h-3 w-3 text-green-600" />
@@ -748,6 +871,26 @@ export default function DraftDetailPage() {
                   </>
                 )}
               </Button>
+              {id && medusaProductId && (
+                <Button
+                  onClick={handleSyncFromMedusa}
+                  disabled={syncingFromMedusa || publishing || saving}
+                  variant="outline"
+                  title="Sync changes from Medusa"
+                >
+                  {syncingFromMedusa ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync from Medusa
+                    </>
+                  )}
+                </Button>
+              )}
               {id && status !== "published" && (
                 <Button
                   onClick={handlePublish}
@@ -798,8 +941,8 @@ export default function DraftDetailPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-8">
             <Tabs defaultValue="en" className="space-y-4">
               <TabsList>
                 <TabsTrigger value="en">English</TabsTrigger>
@@ -807,8 +950,8 @@ export default function DraftDetailPage() {
               </TabsList>
 
               <TabsContent value="en" className="space-y-4">
-                <Card>
-                  <CardHeader>
+                <Card className="border-2 border-border shadow-md">
+                  <CardHeader className="border-b-2 border-border bg-muted/30">
                     <CardTitle>English Content</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -900,8 +1043,8 @@ export default function DraftDetailPage() {
               </TabsContent>
 
               <TabsContent value="fr" className="space-y-4">
-                <Card>
-                  <CardHeader>
+                <Card className="border-2 border-border shadow-md">
+                  <CardHeader className="border-b-2 border-border bg-muted/30">
                     <CardTitle>Contenu Français</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -973,8 +1116,8 @@ export default function DraftDetailPage() {
               </TabsContent>
             </Tabs>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Images</CardTitle>
               </CardHeader>
               <CardContent>
@@ -982,8 +1125,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Supplier Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1043,8 +1186,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Specifications</CardTitle>
               </CardHeader>
               <CardContent>
@@ -1065,7 +1208,7 @@ export default function DraftDetailPage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-8">
             <PriceCalculator
               cost={parseFloat(cost) || 0}
               margin={margin}
@@ -1076,9 +1219,9 @@ export default function DraftDetailPage() {
               }
             />
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Pricing & Inventory</CardTitle>
+            <Card className="border-2 border-primary/50 shadow-lg">
+              <CardHeader className="border-b-2 border-primary/50 bg-primary/5">
+                <CardTitle className="text-primary">Pricing & Inventory</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -1152,8 +1295,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Product Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1249,8 +1392,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Shipping & Dimensions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1310,8 +1453,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Customs & Classification</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1363,8 +1506,8 @@ export default function DraftDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="border-2 border-border shadow-md">
+              <CardHeader className="border-b-2 border-border bg-muted/30">
                 <CardTitle>Metadata</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">

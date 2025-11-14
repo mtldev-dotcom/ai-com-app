@@ -17,6 +17,8 @@ export interface MedusaProduct {
   images?: Array<{ id: string; url: string }>;
   metadata?: Record<string, unknown>;
   variants?: MedusaVariant[];
+  collection_id?: string;
+  categories?: Array<{ id: string; name?: string }>;
   created_at: string;
   updated_at: string;
 }

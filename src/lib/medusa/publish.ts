@@ -150,31 +150,44 @@ export async function publishDraft(
 
     const medusaImages = imagesForMedusa.map((url) => ({ url }));
 
-    // Extract Medusa-specific fields from specifications
+    // Extract Medusa-specific fields from dedicated columns first, then fallback to specifications
     const specs = (product.specifications as Record<string, unknown>) || {};
-    const currencyCode = (specs.currency_code as string) || "CAD";
-    const handle = (specs.handle as string) || undefined;
-    const sku = (specs.sku as string) || undefined;
-    const weight = (specs.weight as number) || undefined;
-    const length = (specs.length as number) || undefined;
-    const categoryIds = Array.isArray(specs.category_ids)
-      ? (specs.category_ids as string[])
-      : specs.category_id
-        ? [specs.category_id as string]
-        : [];
-    const height = (specs.height as number) || undefined;
-    const width = (specs.width as number) || undefined;
-    const originCountry = (specs.origin_country as string) || undefined;
-    const hsCode = (specs.hs_code as string) || undefined;
-    const midCode = (specs.mid_code as string) || undefined;
-    const material = (specs.material as string) || undefined;
-    const type = (specs.type as string) || undefined;
-    const collectionId = (specs.collection_id as string) || undefined;
-    const tagsArray = specs.tags
-      ? Array.isArray(specs.tags)
-        ? (specs.tags as string[])
-        : []
-      : undefined;
+    
+    // Use dedicated columns for these fields (preferred)
+    const handle = product.handle || (specs.handle as string) || undefined;
+    const sku = product.sku || (specs.sku as string) || undefined;
+    const weight = product.weight ? parseFloat(product.weight) : (specs.weight as number) || undefined;
+    const length = product.length ? parseFloat(product.length) : (specs.length as number) || undefined;
+    const height = product.height ? parseFloat(product.height) : (specs.height as number) || undefined;
+    const width = product.width ? parseFloat(product.width) : (specs.width as number) || undefined;
+    const originCountry = product.originCountry || (specs.origin_country as string) || undefined;
+    const hsCode = product.hsCode || (specs.hs_code as string) || undefined;
+    const midCode = product.midCode || (specs.mid_code as string) || undefined;
+    const material = product.material || (specs.material as string) || undefined;
+    
+    // Categories: Use dedicated column first, then fallback to specifications
+    const categoryIds = product.categoryIds && product.categoryIds.length > 0
+      ? product.categoryIds
+      : Array.isArray(specs.category_ids)
+        ? (specs.category_ids as string[])
+        : specs.category_id
+          ? [specs.category_id as string]
+          : [];
+    
+    // Collection: Use dedicated column first, then fallback to specifications
+    const collectionId = product.collectionId || (specs.collection_id as string) || undefined;
+    
+    // Tags: Use dedicated column first, then fallback to specifications
+    const tagsArray = product.tags && product.tags.length > 0
+      ? product.tags
+      : specs.tags
+        ? Array.isArray(specs.tags)
+          ? (specs.tags as string[])
+          : []
+        : undefined;
+    
+    // Currency is always USD
+    const currencyCode = "USD";
 
     // Generate handle from title if not provided
     let productHandle = handle;
@@ -244,9 +257,12 @@ export async function publishDraft(
 
       // Create variants with their prices
       productVariants = variants.map((variant, index) => {
-        const variantPrice =
+        const variantPriceInDollars =
           parseFloat(product.sellingPrice || "0") +
           parseFloat(variant.priceAdjustment || "0");
+        const variantPriceInCents = Math.round(variantPriceInDollars * 100);
+        
+        console.log(`Variant ${index + 1} price conversion: $${variantPriceInDollars} USD = ${variantPriceInCents} cents`);
 
         return {
           title: variant.name || `Variant ${index + 1}`,
@@ -255,8 +271,8 @@ export async function publishDraft(
           },
           prices: [
             {
-              amount: Math.round(variantPrice * 100), // Convert to cents
-              currency_code: currencyCode,
+              amount: variantPriceInCents, // Price in cents
+              currency_code: currencyCode, // USD
             },
           ],
           sku: variant.sku || sku || undefined,
@@ -271,6 +287,12 @@ export async function publishDraft(
         },
       ];
 
+      // Convert selling price from dollars to cents (Medusa expects prices in cents)
+      const sellingPriceInDollars = parseFloat(product.sellingPrice || "0");
+      const sellingPriceInCents = Math.round(sellingPriceInDollars * 100);
+      
+      console.log(`Price conversion: $${sellingPriceInDollars} USD = ${sellingPriceInCents} cents`);
+      
       productVariants = [
         {
           title: "Default",
@@ -279,8 +301,8 @@ export async function publishDraft(
           },
           prices: [
             {
-              amount: Math.round(parseFloat(product.sellingPrice || "0") * 100), // Convert to cents
-              currency_code: currencyCode,
+              amount: sellingPriceInCents, // Price in cents
+              currency_code: currencyCode, // USD
             },
           ],
           sku: sku || undefined,
@@ -292,6 +314,19 @@ export async function publishDraft(
     const medusaTags = tagsArray
       ? tagsArray.map((tag) => ({ value: tag.trim() }))
       : undefined;
+
+    // Prepare categories array for Medusa (must be array of objects with id property)
+    const medusaCategories = categoryIds.length > 0 
+      ? categoryIds.map((id) => ({ id }))
+      : undefined;
+    
+    // Log categories and collection for debugging
+    console.log("Publishing product with:", {
+      collectionId,
+      categoryIds,
+      medusaCategories,
+      currencyCode,
+    });
 
     // Create product in Medusa with options and variants
     // Note: 'type' field is not supported by Medusa API - removed to prevent errors
@@ -306,8 +341,7 @@ export async function publishDraft(
       options: productOptions,
       variants: productVariants,
       collection_id: collectionId || undefined,
-      categories:
-        categoryIds.length > 0 ? categoryIds.map((id) => ({ id })) : undefined,
+      categories: medusaCategories,
       tags: medusaTags,
       weight: weight ? Math.round(weight * 1000) : undefined, // Convert kg to grams
       length: length ? Math.round(length * 10) : undefined, // Convert cm to mm
