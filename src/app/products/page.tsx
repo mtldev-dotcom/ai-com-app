@@ -853,7 +853,14 @@ export default function ProductsPage() {
                             />
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-medium">
+                            <div
+                              className={`font-medium ${product.images && product.images.length > 0 ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
+                              onClick={() => {
+                                if (product.images && product.images.length > 0) {
+                                  setImagePopup({ product, currentIndex: 0 });
+                                }
+                              }}
+                            >
                               {language === "en"
                                 ? product.titleEn || product.titleFr || "Untitled"
                                 : product.titleFr ||
@@ -1500,31 +1507,33 @@ export default function ProductsPage() {
         open={imagePopup !== null}
         onOpenChange={(open) => !open && setImagePopup(null)}
       >
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {imagePopup && (
-            <>
+            <div className="space-y-4">
+              {/* Title */}
               <DialogHeader>
                 <DialogTitle>
                   {language === "en"
-                    ? imagePopup.product.titleEn || imagePopup.product.titleFr || "Product Images"
+                    ? imagePopup.product.titleEn || imagePopup.product.titleFr || "Product"
                     : imagePopup.product.titleFr ||
                     imagePopup.product.titleEn ||
-                    "Images du produit"}
+                    "Produit"}
                 </DialogTitle>
-                <DialogDescription>
-                  {imagePopup.product.images && imagePopup.product.images.length > 0
-                    ? `Image ${imagePopup.currentIndex + 1} of ${imagePopup.product.images.length}`
-                    : "No images available"}
-                </DialogDescription>
               </DialogHeader>
 
+              {/* Image */}
               {imagePopup.product.images && imagePopup.product.images.length > 0 ? (
                 <div className="space-y-4">
-                  {/* Main Image */}
                   <div className="relative w-full overflow-hidden rounded-lg border bg-muted">
                     <img
                       src={imagePopup.product.images[imagePopup.currentIndex]}
-                      alt={`Product image ${imagePopup.currentIndex + 1}`}
+                      alt={
+                        language === "en"
+                          ? imagePopup.product.titleEn || imagePopup.product.titleFr || "Product"
+                          : imagePopup.product.titleFr ||
+                          imagePopup.product.titleEn ||
+                          "Produit"
+                      }
                       className="w-full h-auto max-h-[60vh] object-contain mx-auto"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
@@ -1532,11 +1541,12 @@ export default function ProductsPage() {
                     />
                   </div>
 
-                  {/* Navigation Buttons */}
+                  {/* Navigation for multiple images */}
                   {imagePopup.product.images.length > 1 && (
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center justify-center gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
                         onClick={() =>
                           setImagePopup({
                             ...imagePopup,
@@ -1546,37 +1556,15 @@ export default function ProductsPage() {
                                 : imagePopup.product.images!.length - 1,
                           })
                         }
-                        disabled={imagePopup.product.images.length <= 1}
                       >
                         Previous
                       </Button>
-
-                      <div className="flex gap-2 flex-wrap justify-center">
-                        {imagePopup.product.images.map((img, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() =>
-                              setImagePopup({ ...imagePopup, currentIndex: idx })
-                            }
-                            className={`h-16 w-16 overflow-hidden rounded border transition-all ${idx === imagePopup.currentIndex
-                              ? "ring-2 ring-primary border-primary"
-                              : "hover:border-primary/50"
-                              }`}
-                          >
-                            <img
-                              src={img}
-                              alt={`Thumbnail ${idx + 1}`}
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = "none";
-                              }}
-                            />
-                          </button>
-                        ))}
-                      </div>
-
+                      <span className="text-sm text-muted-foreground">
+                        {imagePopup.currentIndex + 1} / {imagePopup.product.images.length}
+                      </span>
                       <Button
                         variant="outline"
+                        size="sm"
                         onClick={() =>
                           setImagePopup({
                             ...imagePopup,
@@ -1587,22 +1575,11 @@ export default function ProductsPage() {
                                 : 0,
                           })
                         }
-                        disabled={imagePopup.product.images.length <= 1}
                       >
                         Next
                       </Button>
                     </div>
                   )}
-
-                  {/* Image URL */}
-                  <div className="rounded-lg border bg-muted/50 p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">
-                      Image URL:
-                    </p>
-                    <code className="text-xs break-all">
-                      {imagePopup.product.images[imagePopup.currentIndex]}
-                    </code>
-                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12">
@@ -1610,7 +1587,54 @@ export default function ProductsPage() {
                   <p className="text-muted-foreground">No images available</p>
                 </div>
               )}
-            </>
+
+              {/* Product Details */}
+              <div className="space-y-3 pt-4 border-t">
+                {/* Cost USD */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Cost:</span>
+                  <span className="text-sm font-semibold">
+                    ${parseFloat(imagePopup.product.cost || "0").toFixed(2)} USD
+                  </span>
+                </div>
+
+                {/* Marketplace URL */}
+                {imagePopup.product.marketplaceUrl && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Marketplace:</span>
+                    <a
+                      href={imagePopup.product.marketplaceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline flex items-center gap-1"
+                    >
+                      View Product
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
+                  <span
+                    className={`text-xs font-medium px-2 py-1 rounded ${imagePopup.product.status === "published"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                      : imagePopup.product.status === "ready"
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                        : imagePopup.product.status === "enriched"
+                          ? "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400"
+                          : imagePopup.product.status === "archived"
+                            ? "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
+                      }`}
+                  >
+                    {imagePopup.product.status.charAt(0).toUpperCase() +
+                      imagePopup.product.status.slice(1)}
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

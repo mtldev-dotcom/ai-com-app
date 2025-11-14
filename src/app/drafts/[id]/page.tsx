@@ -32,12 +32,14 @@ import {
   CheckCircle2,
   Upload,
   Languages,
+  ExternalLink,
 } from "lucide-react";
 import { AIFillButton } from "@/components/drafts/ai-fill-button";
 import { MedusaEntitySelector } from "@/components/drafts/medusa-entity-selector";
 import {
   generateTitleAction,
   generateDescriptionAction,
+  generateSubtitleAction,
   generateHandleAction,
   generateTagsAction,
   generateMaterialTypeAction,
@@ -69,6 +71,9 @@ export default function DraftDetailPage() {
   const [cost, setCost] = useState("");
   const [margin, setMargin] = useState(30);
   const [sellingPrice, setSellingPrice] = useState("");
+  // CAD pricing fields
+  const [cadExchangeRate, setCadExchangeRate] = useState("1.35"); // Default USD to CAD rate
+  const [cadSellingPrice, setCadSellingPrice] = useState("");
   // Product identification fields (dedicated columns)
   const [handle, setHandle] = useState("");
   const [currency, setCurrency] = useState("USD"); // All currency is USD
@@ -190,6 +195,20 @@ export default function DraftDetailPage() {
     }
   }, [cost, margin]);
 
+  // Auto-calculate CAD selling price when USD selling price or exchange rate changes
+  useEffect(() => {
+    const usdPrice = parseFloat(sellingPrice) || 0;
+    const exchangeRate = parseFloat(cadExchangeRate) || 1.35;
+    if (usdPrice > 0 && exchangeRate > 0) {
+      const cadPrice = usdPrice * exchangeRate;
+      // Round to 2 decimal places to avoid floating point precision issues
+      const roundedCadPrice = Math.round(cadPrice * 100) / 100;
+      setCadSellingPrice(roundedCadPrice.toFixed(2));
+    } else {
+      setCadSellingPrice("");
+    }
+  }, [sellingPrice, cadExchangeRate]);
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -275,6 +294,7 @@ export default function DraftDetailPage() {
         const product = draftData.product;
         setTitleEn(product.titleEn || titleEn);
         setTitleFr(product.titleFr || titleFr);
+        setSubtitle(product.subtitle || subtitle);
         setDescriptionEn(product.descriptionEn || descriptionEn);
         setDescriptionFr(product.descriptionFr || descriptionFr);
         setSpecifications(
@@ -305,6 +325,18 @@ export default function DraftDetailPage() {
       setTimeout(() => setSuccess(null), 3000);
     } else {
       setError(result.error || "Failed to generate title");
+    }
+  };
+
+  const handleAIFillSubtitle = async () => {
+    if (!id) return;
+    const result = await generateSubtitleAction(id);
+    if (result.success && result.subtitle) {
+      setSubtitle(result.subtitle);
+      setSuccess("Subtitle generated");
+      setTimeout(() => setSuccess(null), 3000);
+    } else {
+      setError(result.error || "Failed to generate subtitle");
     }
   };
 
@@ -667,12 +699,20 @@ export default function DraftDetailPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="subtitle">Subtitle</Label>
-                      <Input
-                        id="subtitle"
-                        value={subtitle}
-                        onChange={(e) => setSubtitle(e.target.value)}
-                        placeholder="Product subtitle (optional)"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="subtitle"
+                          value={subtitle}
+                          onChange={(e) => setSubtitle(e.target.value)}
+                          placeholder="Product subtitle (optional)"
+                          className="flex-1"
+                        />
+                        <AIFillButton
+                          onClick={handleAIFillSubtitle}
+                          disabled={!id}
+                          title="Generate subtitle"
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Short product subtitle or tagline
                       </p>
@@ -829,13 +869,29 @@ export default function DraftDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="marketplaceUrl">Marketplace URL</Label>
-                  <Input
-                    id="marketplaceUrl"
-                    value={marketplaceUrl}
-                    onChange={(e) => setMarketplaceUrl(e.target.value)}
-                    placeholder="https://www.supplier.com/product/123"
-                    type="url"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="marketplaceUrl"
+                      value={marketplaceUrl}
+                      onChange={(e) => setMarketplaceUrl(e.target.value)}
+                      placeholder="https://www.supplier.com/product/123"
+                      type="url"
+                      className="flex-1"
+                    />
+                    {marketplaceUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          window.open(marketplaceUrl, "_blank", "noopener,noreferrer");
+                        }}
+                        title="Open marketplace URL in new tab"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     URL to product on supplier's marketplace site
                   </p>
@@ -897,6 +953,43 @@ export default function DraftDetailPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Required for publishing to Medusa. All prices are in USD.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="cadExchangeRate">
+                    CAD Exchange Rate
+                  </Label>
+                  <Input
+                    id="cadExchangeRate"
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    value={cadExchangeRate}
+                    onChange={(e) => setCadExchangeRate(e.target.value)}
+                    placeholder="1.35"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    USD to CAD exchange rate (e.g., 1.35 means $1 USD = $1.35 CAD)
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="cadSellingPrice">
+                    Selling Price (CAD)
+                  </Label>
+                  <Input
+                    id="cadSellingPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cadSellingPrice}
+                    placeholder="0.00"
+                    readOnly
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Automatically calculated from USD price and exchange rate
                   </p>
                 </div>
 

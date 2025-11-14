@@ -17,6 +17,7 @@ export async function enrichProduct(input: EnrichInput): Promise<EnrichOutput> {
   // Fetch product data if productId is provided
   let productTitle = input.title;
   let productDescription = input.description;
+  let productSubtitle = input.subtitle;
   let productSpecs = input.specifications;
 
   if (input.productId) {
@@ -28,6 +29,7 @@ export async function enrichProduct(input: EnrichInput): Promise<EnrichOutput> {
         product.product.descriptionEn ||
         product.product.descriptionFr ||
         productDescription;
+      productSubtitle = product.product.subtitle || productSubtitle;
       productSpecs = product.product.specifications || productSpecs;
     }
   }
@@ -36,20 +38,23 @@ export async function enrichProduct(input: EnrichInput): Promise<EnrichOutput> {
 Given the following product information, generate comprehensive bilingual (English and French) content.
 
 Product Title: ${productTitle || "N/A"}
+Product Subtitle: ${productSubtitle || "N/A"}
 Product Description: ${productDescription || "N/A"}
 Existing Specifications: ${JSON.stringify(productSpecs || {})}
 
 Please provide:
 1. Enhanced English title (concise, SEO-friendly)
 2. Enhanced French title (concise, SEO-friendly)
-3. Detailed English description (3-5 sentences, highlighting key features and benefits)
-4. Detailed French description (3-5 sentences, highlighting key features and benefits)
-5. Technical specifications as a JSON object (extract or infer from available information)
+3. Product subtitle (short, catchy tagline or key selling point - 5-10 words max)
+4. Detailed English description (3-5 sentences, highlighting key features and benefits)
+5. Detailed French description (3-5 sentences, highlighting key features and benefits)
+6. Technical specifications as a JSON object (extract or infer from available information)
 
 Respond in JSON format:
 {
   "titleEn": "...",
   "titleFr": "...",
+  "subtitle": "...",
   "descriptionEn": "...",
   "descriptionFr": "...",
   "specifications": {...}
@@ -81,6 +86,7 @@ Respond in JSON format:
     return {
       titleEn: parsed.titleEn || productTitle,
       titleFr: parsed.titleFr,
+      subtitle: parsed.subtitle || productSubtitle,
       descriptionEn: parsed.descriptionEn || productDescription,
       descriptionFr: parsed.descriptionFr,
       specifications: parsed.specifications || productSpecs,

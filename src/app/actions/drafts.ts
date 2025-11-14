@@ -309,6 +309,7 @@ export async function enrichDraft(
       .set({
         titleEn: enriched.titleEn || draft[0].titleEn,
         titleFr: enriched.titleFr || draft[0].titleFr,
+        subtitle: enriched.subtitle || draft[0].subtitle,
         descriptionEn: enriched.descriptionEn || draft[0].descriptionEn,
         descriptionFr: enriched.descriptionFr || draft[0].descriptionFr,
         specifications: enriched.specifications || draft[0].specifications,

@@ -54,7 +54,7 @@ export function PriceCalculator({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="cost">Cost (CAD)</Label>
+          <Label htmlFor="cost">Cost (USD)</Label>
           <Input
             id="cost"
             type="number"
@@ -87,11 +87,11 @@ export function PriceCalculator({
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Selling Price:</span>
             <span className="text-2xl font-bold">
-              ${calculatedPrice.toFixed(2)}
+              ${calculatedPrice.toFixed(2)} USD
             </span>
           </div>
           <div className="mt-2 text-xs text-muted-foreground">
-            Margin: ${(calculatedPrice - (parseFloat(cost) || 0)).toFixed(2)}
+            Margin: ${(calculatedPrice - (parseFloat(cost) || 0)).toFixed(2)} USD
           </div>
         </div>
       </CardContent>

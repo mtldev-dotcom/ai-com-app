@@ -3,9 +3,9 @@
 /**
  * Image Manager Component
  * Manages product images (add, remove, reorder)
- * Supports both URL input and S3 file upload
+ * Supports both URL input, S3 file upload, paste from clipboard, and multiple file uploads
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,9 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const addImage = () => {
     if (newImageUrl.trim()) {
@@ -29,28 +31,60 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
     }
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const processFiles = async (files: File[]) => {
+    const validFiles = files.filter((file) => {
+      if (!file.type.startsWith("image/")) {
+        setUploadError("Please select image files only");
+        return false;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError(`Image ${file.name} is too large (max 10MB)`);
+        return false;
+      }
+      return true;
+    });
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Please select an image file");
-      return;
-    }
-
-    // Validate file size (max 10MB - S3 can handle larger files)
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError("Image size must be less than 10MB");
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setUploading(true);
     setUploadError(null);
+    setUploadProgress(0);
 
-    try {
+    const uploadedUrls: string[] = [];
+    const totalFiles = validFiles.length;
+
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      try {
+        const url = await uploadSingleFile(file);
+        if (url) {
+          uploadedUrls.push(url);
+        }
+        setUploadProgress(((i + 1) / totalFiles) * 100);
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        setUploadError(
+          `Failed to upload ${file.name}: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+    }
+
+    if (uploadedUrls.length > 0) {
+      onImagesChange([...images, ...uploadedUrls]);
+    }
+
+    setUploading(false);
+    setUploadProgress(0);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadSingleFile = async (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
       // Compress and resize image before upload
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -82,8 +116,7 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
           // Draw and compress
           const ctx = canvas.getContext("2d");
           if (!ctx) {
-            setUploadError("Failed to process image");
-            setUploading(false);
+            reject(new Error("Failed to process image"));
             return;
           }
 
@@ -101,8 +134,7 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
           canvas.toBlob(
             async (blob) => {
               if (!blob) {
-                setUploadError("Failed to process image");
-                setUploading(false);
+                reject(new Error("Failed to process image"));
                 return;
               }
 
@@ -126,23 +158,16 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
                 const result = await response.json();
 
                 if (result.success && result.url) {
-                  // Add S3 URL to images array
-                  onImagesChange([...images, result.url]);
+                  resolve(result.url);
                 } else {
-                  setUploadError(result.error || "Failed to upload image");
+                  reject(new Error(result.error || "Failed to upload image"));
                 }
               } catch (error) {
-                setUploadError(
+                reject(
                   error instanceof Error
-                    ? error.message
-                    : "Failed to upload image"
+                    ? error
+                    : new Error("Failed to upload image")
                 );
-              } finally {
-                setUploading(false);
-                // Reset file input
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = "";
-                }
               }
             },
             mimeType, // Use the correct MIME type based on original file
@@ -150,23 +175,64 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
           );
         };
         img.onerror = () => {
-          setUploadError("Failed to load image");
-          setUploading(false);
+          reject(new Error("Failed to load image"));
         };
         img.src = e.target?.result as string;
       };
       reader.onerror = () => {
-        setUploadError("Failed to read image file");
-        setUploading(false);
+        reject(new Error("Failed to read image file"));
       };
       reader.readAsDataURL(file);
-    } catch (error) {
-      setUploadError(
-        error instanceof Error ? error.message : "Failed to upload image"
-      );
-      setUploading(false);
-    }
+    });
   };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    await processFiles(fileArray);
+  };
+
+  // Handle paste from clipboard
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        await processFiles(imageFiles);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("paste", handlePaste);
+      // Make container focusable for paste events
+      container.setAttribute("tabIndex", "-1");
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener("paste", handlePaste);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - processFiles uses latest images through closure
 
   const removeImage = (index: number) => {
     onImagesChange(images.filter((_, i) => i !== index));
@@ -185,7 +251,7 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div ref={containerRef} className="space-y-4">
       <div className="space-y-2">
         <Label>Add Image from URL</Label>
         <div className="flex items-center gap-2">
@@ -208,20 +274,29 @@ export function ImageManager({ images, onImagesChange }: ImageManagerProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>Upload Image from Computer</Label>
+        <Label>Upload Images from Computer</Label>
         <div className="flex items-center gap-2">
           <Input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleFileUpload}
             disabled={uploading}
             className="cursor-pointer"
           />
           {uploading && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : "Uploading..."}
+              </span>
+            </div>
           )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          You can select multiple images or paste images from clipboard (click here first, then paste)
+        </p>
         {uploadError && (
           <p className="text-sm text-destructive">{uploadError}</p>
         )}

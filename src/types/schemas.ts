@@ -98,6 +98,7 @@ export const enrichInputSchema = z
   .object({
     productId: z.string().uuid("Invalid product ID").optional(),
     title: z.string().optional(),
+    subtitle: z.string().optional(),
     description: z.string().optional(),
     specifications: z.record(z.unknown()).optional(),
     provider: z.enum(["openai", "gemini"]).default("openai"),
@@ -114,6 +115,7 @@ export type EnrichInput = z.infer<typeof enrichInputSchema>;
 export const enrichOutputSchema = z.object({
   titleEn: z.string().optional(),
   titleFr: z.string().optional(),
+  subtitle: z.string().optional(),
   descriptionEn: z.string().optional(),
   descriptionFr: z.string().optional(),
   specifications: z.record(z.unknown()).optional(),

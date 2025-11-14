@@ -237,6 +237,69 @@ Return only the title, no explanations.`;
 }
 
 /**
+ * Generate/improve subtitle using AI
+ */
+export async function generateSubtitleAction(
+  productId: string,
+  provider: AIProvider = "openai"
+): Promise<{ success: boolean; subtitle?: string; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const product = await getProductDraftById(productId);
+    if (!product) {
+      return { success: false, error: "Product not found" };
+    }
+
+    const existingTitleEn = product.product.titleEn || "";
+    const existingTitleFr = product.product.titleFr || "";
+    const existingSubtitle = product.product.subtitle || "";
+    const existingDescription =
+      product.product.descriptionEn || product.product.descriptionFr || "";
+
+    const prompt = `You are an e-commerce product subtitle expert. ${existingSubtitle ? "Improve the existing subtitle" : "Generate a new subtitle"} for this product.
+
+Product Title (EN): ${existingTitleEn || "N/A"}
+Product Title (FR): ${existingTitleFr || "N/A"}
+Existing Subtitle: ${existingSubtitle || "None"}
+Product Description: ${existingDescription || "N/A"}
+
+Generate a short, catchy subtitle or tagline (5-10 words max) that:
+- Captures the key selling point or benefit
+- Is memorable and compelling
+- Complements the product title
+- Appeals to the target audience
+
+Return only the subtitle, no explanations.`;
+
+    let response: string;
+    if (provider === "gemini") {
+      response = await generateWithGemini(prompt);
+    } else {
+      response = await generateWithOpenAI(prompt);
+    }
+
+    const subtitle = response.trim().replace(/^["']|["']$/g, "");
+
+    return { success: true, subtitle };
+  } catch (error) {
+    console.error("Generate subtitle error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to generate subtitle",
+    };
+  }
+}
+
+/**
  * Generate/improve description using AI
  */
 export async function generateDescriptionAction(
