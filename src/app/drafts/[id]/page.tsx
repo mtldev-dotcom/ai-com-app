@@ -4,8 +4,9 @@
  * Draft Detail Page
  * Edit product draft with FR/EN tabs, images, specs, and price calculator
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useAutoSave } from "@/hooks/use-auto-save";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 import { AIFillButton } from "@/components/drafts/ai-fill-button";
 import { MedusaEntitySelector } from "@/components/drafts/medusa-entity-selector";
+import { MedusaCategoryMultiSelect } from "@/components/drafts/medusa-category-multiselect";
 import {
   generateTitleAction,
   generateDescriptionAction,
@@ -54,10 +56,18 @@ export default function DraftDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [syncingToMedusa, setSyncingToMedusa] = useState(false);
+  const [medusaProductId, setMedusaProductId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const previousStatusRef = useRef<
+    "draft" | "enriched" | "ready" | "published" | "archived" | ""
+  >("");
+  const isManualPublishRef = useRef(false);
 
   const [supplierId, setSupplierId] = useState("");
   const [titleEn, setTitleEn] = useState("");
@@ -167,6 +177,8 @@ export default function DraftDetailPage() {
               setTypeId(specs.type_id as string);
             }
             setStatus(product.status);
+            setMedusaProductId(product.medusaProductId || null);
+            previousStatusRef.current = product.status;
           }
           setLoading(false);
         })
@@ -209,66 +221,164 @@ export default function DraftDetailPage() {
     }
   }, [sellingPrice, cadExchangeRate]);
 
+  // Auto-sync to Medusa when status changes to "published" or "ready"
+  useEffect(() => {
+    // Skip on initial load or if loading
+    if (loading || !id) {
+      return;
+    }
+
+    // Skip if this is a manual publish operation
+    if (isManualPublishRef.current) {
+      isManualPublishRef.current = false;
+      previousStatusRef.current = status;
+      return;
+    }
+
+    // Skip if product is already published (has medusaProductId)
+    if (medusaProductId) {
+      previousStatusRef.current = status;
+      return;
+    }
+
+    const shouldAutoSync =
+      (status === "published" || status === "ready") &&
+      previousStatusRef.current !== status &&
+      previousStatusRef.current !== "published" && // Don't re-sync if already published
+      previousStatusRef.current !== ""; // Don't sync on initial load
+
+    if (shouldAutoSync) {
+      const syncToMedusa = async () => {
+        setSyncingToMedusa(true);
+        try {
+          // First, ensure draft is saved
+          const draftData = getDraftData();
+          await saveDraft(id, draftData);
+
+          // Then sync to Medusa
+          if (status === "published") {
+            const result = await publishDraftAction(id);
+            if (result.success) {
+              setMedusaProductId(result.medusaProductId || null);
+              setSuccess(
+                `Product auto-synced to Medusa! Product ID: ${result.medusaProductId}`
+              );
+              setTimeout(() => setSuccess(null), 5000);
+            } else {
+              // Only log if it's not the "already published" error (which is expected in some cases)
+              if (result.error?.includes("already been published")) {
+                // This is expected if product was published manually, just update the ref
+                const draftData = await getProductDraftAction(id);
+                if (draftData?.product.medusaProductId) {
+                  setMedusaProductId(draftData.product.medusaProductId);
+                }
+              } else {
+                console.error("Auto-sync to Medusa failed:", result.error);
+              }
+            }
+          } else if (status === "ready") {
+            // For "ready" status, we might want to prepare the product but not publish yet
+            // For now, we'll just save the draft
+            console.log("Product marked as ready, saved to database");
+          }
+        } catch (err) {
+          console.error("Auto-sync error:", err);
+          // Don't show error for auto-sync failures
+        } finally {
+          setSyncingToMedusa(false);
+        }
+      };
+
+      syncToMedusa();
+    }
+    
+    // Update previous status
+    previousStatusRef.current = status;
+  }, [status, id, loading, medusaProductId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prepare draft data object for saving
+  const getDraftData = () => {
+    const updatedSpecifications = {
+      ...specifications,
+      pid: supplierProductId || specifications.pid,
+      vid: supplierVariantId || specifications.vid,
+      marketplace_url: marketplaceUrl || specifications.marketplace_url,
+      subtitle: subtitle || specifications.subtitle,
+      type_id: typeId || specifications.type_id,
+    };
+
+    return {
+      supplierId,
+      titleEn,
+      titleFr,
+      subtitle,
+      descriptionEn,
+      descriptionFr,
+      metaTitle,
+      metaDescription,
+      images,
+      cost,
+      sellingPrice,
+      margin: margin.toString(),
+      sku,
+      handle,
+      currency: "USD",
+      supplierProductId,
+      supplierVariantId,
+      marketplaceUrl,
+      weight,
+      length,
+      width,
+      height,
+      material,
+      originCountry,
+      hsCode,
+      midCode,
+      type,
+      collectionId,
+      categoryIds,
+      tags: tags
+        ? tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+        : [],
+      specifications: updatedSpecifications,
+      status,
+    };
+  };
+
+  // Auto-save function
+  const autoSaveFn = async () => {
+    if (!id) return; // Don't auto-save new drafts
+    
+    setAutoSaving(true);
+    try {
+      const draftData = getDraftData();
+      await saveDraft(id, draftData);
+      setLastSaved(new Date());
+    } catch (err) {
+      console.error("Auto-save error:", err);
+      // Don't show error for auto-save failures, just log them
+    } finally {
+      setAutoSaving(false);
+    }
+  };
+
+  // Enable auto-save when draft is loaded
+  const draftDataForAutoSave = getDraftData();
+  useAutoSave(autoSaveFn, draftDataForAutoSave, 2000, !!id && !loading);
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      // Keep specifications for backward compatibility and additional supplier fields
-      // But save dedicated columns separately
-      const updatedSpecifications = {
-        ...specifications,
-        // Keep supplier-specific fields in specifications for reference
-        pid: supplierProductId || specifications.pid,
-        vid: supplierVariantId || specifications.vid,
-        marketplace_url: marketplaceUrl || specifications.marketplace_url,
-        subtitle: subtitle || specifications.subtitle,
-        // Keep type_id in specifications if using Medusa type selector
-        type_id: typeId || specifications.type_id,
-      };
-
-      await saveDraft(id || null, {
-        supplierId,
-        titleEn,
-        titleFr,
-        subtitle,
-        descriptionEn,
-        descriptionFr,
-        metaTitle,
-        metaDescription,
-        images,
-        cost,
-        sellingPrice,
-        margin: margin.toString(),
-        // Dedicated columns
-        sku,
-        handle,
-        currency: "USD", // Always USD
-        supplierProductId,
-        supplierVariantId,
-        marketplaceUrl,
-        weight,
-        length,
-        width,
-        height,
-        material,
-        originCountry,
-        hsCode,
-        midCode,
-        type,
-        collectionId,
-        categoryIds,
-        tags: tags
-          ? tags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
-          : [],
-        specifications: updatedSpecifications,
-        status,
-      });
+      const draftData = getDraftData();
+      await saveDraft(id || null, draftData);
       setSuccess("Draft saved successfully");
+      setLastSaved(new Date());
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save draft");
@@ -490,6 +600,8 @@ export default function DraftDetailPage() {
       return;
     }
 
+    // Mark as manual publish to prevent auto-sync from running
+    isManualPublishRef.current = true;
     setPublishing(true);
     setError(null);
     setSuccess(null);
@@ -498,6 +610,7 @@ export default function DraftDetailPage() {
       const result = await publishDraftAction(id);
 
       if (result.success) {
+        setMedusaProductId(result.medusaProductId || null);
         setSuccess(
           `Product published successfully! Medusa Product ID: ${result.medusaProductId}`
         );
@@ -506,6 +619,8 @@ export default function DraftDetailPage() {
         const draftData = await getProductDraftAction(id);
         if (draftData) {
           setStatus("published");
+          setMedusaProductId(draftData.product.medusaProductId || null);
+          previousStatusRef.current = "published";
         }
       } else {
         setError(result.error || "Failed to publish product to Medusa");
@@ -516,6 +631,10 @@ export default function DraftDetailPage() {
       );
     } finally {
       setPublishing(false);
+      // Reset manual publish flag after a short delay to ensure status update completes
+      setTimeout(() => {
+        isManualPublishRef.current = false;
+      }, 100);
     }
   };
 
@@ -572,71 +691,96 @@ export default function DraftDetailPage() {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleEnrich}
-              disabled={
-                !id || enriching || publishing || status === "published"
-              }
-              variant="outline"
-            >
-              {enriching ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Enriching...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  AI Enrich
-                </>
-              )}
-            </Button>
-            <Button onClick={handleSave} disabled={saving || publishing}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save
-                </>
-              )}
-            </Button>
-            {id && status !== "published" && (
+          <div className="flex items-center gap-2">
+            {/* Auto-save status indicator */}
+            {id && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {autoSaving ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Auto-saving...</span>
+                  </>
+                ) : syncingToMedusa ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Syncing to Medusa...</span>
+                  </>
+                ) : lastSaved ? (
+                  <>
+                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                    <span>
+                      Saved {lastSaved.toLocaleTimeString()}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            )}
+            <div className="flex gap-2">
               <Button
-                onClick={handlePublish}
-                disabled={publishing || saving || enriching || !sellingPrice}
-                variant="default"
-                className="bg-primary"
+                onClick={handleEnrich}
+                disabled={
+                  !id || enriching || publishing || status === "published"
+                }
+                variant="outline"
               >
-                {publishing ? (
+                {enriching ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Publishing...
+                    Enriching...
                   </>
                 ) : (
                   <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Publish to Medusa
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    AI Enrich
                   </>
                 )}
               </Button>
-            )}
-            {id && status === "published" && (
-              <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Published</span>
-              </div>
-            )}
-            {id && (
-              <Button onClick={handleDelete} variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+              <Button onClick={handleSave} disabled={saving || publishing || autoSaving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save
+                  </>
+                )}
               </Button>
-            )}
+              {id && status !== "published" && (
+                <Button
+                  onClick={handlePublish}
+                  disabled={publishing || saving || enriching || !sellingPrice}
+                  variant="default"
+                  className="bg-primary"
+                >
+                  {publishing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Publish to Medusa
+                    </>
+                  )}
+                </Button>
+              )}
+              {id && status === "published" && (
+                <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Published</span>
+                </div>
+              )}
+              {id && (
+                <Button onClick={handleDelete} variant="destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1075,24 +1219,11 @@ export default function DraftDetailPage() {
                   <p className="text-xs text-muted-foreground mb-2">
                     Select categories from synced Medusa categories
                   </p>
-                  <MedusaEntitySelector
-                    entityType="category"
-                    value={categoryIds[0] || ""}
-                    onValueChange={(value) =>
-                      setCategoryIds(value ? [value] : [])
-                    }
-                    placeholder={
-                      categoryIds.length > 0
-                        ? "Change primary category"
-                        : "Select category from Medusa"
-                    }
+                  <MedusaCategoryMultiSelect
+                    value={categoryIds}
+                    onValueChange={setCategoryIds}
+                    placeholder="Select categories..."
                   />
-                  {categoryIds.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Currently: {categoryIds.length} category selected
-                      (Multiple category selection coming soon)
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
